@@ -5,6 +5,7 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import { addHours } from "date-fns";
+import { sendVerificationEmail } from "@/lib/mail";
 
 const prisma = new PrismaClient();
 
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
         tokenExpiry,
       },
     });
-
+    await sendVerificationEmail(email, verificationToken);
     // TODO: Send verification email with link including token
     // e.g., `${process.env.NEXT_PUBLIC_BASE_URL}/verify?token=${verificationToken}`
 
