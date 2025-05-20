@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CLIENT
+  AGENT
+  ADMIN
+}
+
+enum RoomType {
+  SIMPLE
+  DOUBLE
+  DOUBLE_CONFORT
+  SUITE
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+  CHECKED_IN
+  CHECKED_OUT
+}
+
+enum ReservationSource {
+  WEB
+  MOBILE
+  RECEPTION
+}
+
+enum ExportFormat {
+  PDF
+  CSV
+  EXCEL
+}
+
+enum AlertType {
+  PENDING_RESERVATION
+  LOW_OCCUPANCY
+  HIGH_DEMAND
+}
+
+model User {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  password       String
+  role           Role
+  isEmailVerified Boolean  @default(false)
+  name           String
+  phone          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  reservations   Reservation[]
+  feedbacks      Feedback[]
+  notifications  Notification[]
+  assignedRooms  Room[]           @relation("AssignedRooms")
+  invoiceExports InvoiceExport[]
+
+  agent          Agent?
+  admin          Admin?
+  profile        ClientProfile?
+}
+
+model ClientProfile {
+  id           String   @id @default(cuid())
+  user         User     @relation(fields: [userId], references: [id])
+  userId       String   @unique
+  taxId        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Agent {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  services  Service[]
+}
+
+model Admin {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String   @unique
+  twoFASecret String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Reservation {
+  id             String            @id @default(cuid())
+  client         User              @relation(fields: [clientId], references: [id])
+  clientId       String
+  rooms          Room[]            @relation("ReservationRooms")
+  checkIn        DateTime
+  checkOut       DateTime
+  status         ReservationStatus @default(PENDING)
+  totalPrice     Float
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  invoices      Invoice[] 
+  sourceLog      ReservationLog?
+  consumptions   ServiceConsumption[]
+}
+
+model Room {
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  roomNumber     String       @unique
+  type           RoomType
+  floor          Int
+  pricePerNight  Float
+  available      Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  reservations   Reservation[] @relation("ReservationRooms")
+  assignedTo     User?        @relation("AssignedRooms", fields: [assignedToId], references: [id])
+  assignedToId   String?
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  reservation    Reservation   @relation(fields: [reservationId], references: [id])
+  reservationId  String        @unique  
+  fileUrl        String
+  sentByEmail    Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  exports        InvoiceExport[]
+}
+
+model InvoiceExport {
+  id         String       @id @default(cuid())
+  invoice    Invoice      @relation(fields: [invoiceId], references: [id])
+  invoiceId  String
+  exportedBy User         @relation(fields: [userId], references: [id])
+  userId     String
+  format     ExportFormat
+  createdAt  DateTime     @default(now())
+}
+
+model Notification {
+  id         String    @id @default(cuid())
+  user       User      @relation(fields: [userId], references: [id])
+  userId     String
+  message    String
+  photoUrl   String?
+  read       Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+}
+
+model Feedback {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  message    String
+  photoUrl   String?
+  createdAt  DateTime @default(now())
+}
+
+model Service {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  price        Float
+  addedByAgent Agent?   @relation(fields: [agentId], references: [id])
+  agentId      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  consumptions ServiceConsumption[]
+}
+
+model ServiceConsumption {
+  id            String        @id @default(cuid())
+  reservation   Reservation   @relation(fields: [reservationId], references: [id])
+  reservationId String
+  service       Service       @relation(fields: [serviceId], references: [id])
+  serviceId     String
+  quantity      Int           @default(1)
+  addedAt       DateTime      @default(now())
+}
+
+model HotelInfo {
+  id         String            @id @default(cuid())
+  name       String            @unique
+  address    String
+  city       String
+  stars      Int
+  latitude   Float
+  longitude  Float
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  pricing    Float
+}
+
+
+model ReservationLog {
+  id             String             @id @default(cuid())
+  reservation    Reservation        @relation(fields: [reservationId], references: [id])
+  reservationId  String             @unique 
+  source         ReservationSource
+  createdAt      DateTime           @default(now())
+}
+
+model Alert {
+  id         String     @id @default(cuid())
+  type       AlertType
+  message    String
+  forAdmin   Boolean    @default(false)
+  forAgent   Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+  read       Boolean    @default(false)
+}
