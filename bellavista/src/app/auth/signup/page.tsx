@@ -7,15 +7,7 @@ import Navbar from "@/components/ui/navbar";
 import { toast } from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  User,
-  Mail,
-  Phone,
-  Lock,
-  ShieldCheck,
-  LogIn,
-  ChevronRight,
-} from "lucide-react";
+import { User, Mail, Phone, Lock, ShieldCheck, LogIn } from "lucide-react";
 import { signIn } from "next-auth/react";
 
 interface SignupForm {
@@ -46,23 +38,53 @@ const SignupPage = () => {
 
   const validateForm = (): boolean => {
     if (!formData.firstName || !formData.lastName) {
-      toast.error("Please enter your full name");
+      toast.error("Please enter your full name", {
+        style: {
+          background: "#000",
+          color: "#E3C08D",
+          border: "1px solid #E3C08D",
+        },
+      });
       return false;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      toast.error("Please enter a valid email address");
+      toast.error("Please enter a valid email address", {
+        style: {
+          background: "#000",
+          color: "#E3C08D",
+          border: "1px solid #E3C08D",
+        },
+      });
       return false;
     }
     if (!/^\+?[\d\s-]{8,}$/.test(formData.phone)) {
-      toast.error("Please enter a valid phone number");
+      toast.error("Please enter a valid phone number", {
+        style: {
+          background: "#000",
+          color: "#E3C08D",
+          border: "1px solid #E3C08D",
+        },
+      });
       return false;
     }
     if (formData.password.length < 8) {
-      toast.error("Password must be at least 8 characters");
+      toast.error("Password must be at least 8 characters", {
+        style: {
+          background: "#000",
+          color: "#E3C08D",
+          border: "1px solid #E3C08D",
+        },
+      });
       return false;
     }
     if (formData.password !== formData.verifyPassword) {
-      toast.error("Passwords do not match");
+      toast.error("Passwords do not match", {
+        style: {
+          background: "#000",
+          color: "#E3C08D",
+          border: "1px solid #E3C08D",
+        },
+      });
       return false;
     }
     return true;
@@ -86,7 +108,13 @@ const SignupPage = () => {
       localStorage.setItem("verificationEmail", formData.email);
       router.push("/auth/verification");
     } catch (error: any) {
-      toast.error(error.message || "Signup failed");
+      toast.error(error.message || "Signup failed", {
+        style: {
+          background: "#000",
+          color: "#E3C08D",
+          border: "1px solid #E3C08D",
+        },
+      });
     } finally {
       setIsLoading(false);
     }
@@ -96,207 +124,348 @@ const SignupPage = () => {
     try {
       await signIn(provider, { callbackUrl: "/dashboard" });
     } catch {
-      toast.error(`Failed to sign in with ${provider}`);
+      toast.error(`Failed to sign in with ${provider}`, {
+        style: {
+          background: "#000",
+          color: "#E3C08D",
+          border: "1px solid #E3C08D",
+        },
+      });
     }
   };
 
   return (
     <>
       <Navbar />
-      <div
-        className="relative min-h-screen bg-cover bg-center"
-        style={{ backgroundImage: "url(/beachBack.jpg)" }}
-      >
-        <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-0" />
+      <div className="relative min-h-screen w-full overflow-hidden">
+        {/* Background */}
+        <div className="absolute inset-0 z-0">
+          <Image
+            src="/beachBack.jpg"
+            alt="Background"
+            fill
+            style={{ objectFit: "cover" }}
+            priority
+          />
+          <div className="absolute inset-0 bg-black/60" />
+        </div>
 
-        <div className="relative z-10 flex flex-col lg:flex-row items-center justify-center min-h-screen p-6 gap-8">
-          {/* Branding */}
-          <motion.div
-            initial={{ opacity: 0, x: -40 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
-            className="w-full lg:w-1/2 text-center lg:text-left"
-          >
-            <h1 className="text-[#E3C08D] text-4xl md:text-5xl font-seasons mb-4">
-              BELLAVISTA
-            </h1>
-            <p className="text-[#E3C08D] text-xl md:text-2xl font-seasons mb-6">
-              Where Your Vacation Story Begins
-            </p>
-            <motion.button
-              whileHover={{ x: 10 }}
-              onClick={() => router.push("/login")}
-              className="text-[#E3C08D] text-lg font-seasons flex items-center mx-auto lg:mx-0"
-            >
-              Log in now <LogIn className="ml-2" />
-            </motion.button>
-          </motion.div>
-
-          {/* Signup Form */}
+        {/* Main Content */}
+        <div className="relative z-10 flex justify-center items-center min-h-screen px-4 py-12">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="w-full max-w-lg bg-black bg-opacity-30 rounded-3xl border border-[#E3C08D] p-8 backdrop-blur-md"
+            transition={{ duration: 0.8 }}
+            className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-6 rounded-3xl overflow-hidden backdrop-blur-md"
           >
-            <div className="flex justify-center mb-6">
-              <Link href="/">
+            {/* Left Content - Branding Panel */}
+            <div className="relative overflow-hidden bg-black/40 border-r border-[#E3C08D]/30 p-8 flex flex-col justify-between lg:min-h-[680px]">
+              <div className="absolute inset-0 z-0 opacity-20">
                 <Image
-                  src="/bellavistaIcon.png"
-                  alt="Logo"
-                  width={150}
-                  height={60}
+                  src="/beachBack.jpg"
+                  alt="Background"
+                  fill
+                  style={{ objectFit: "cover" }}
                 />
-              </Link>
-            </div>
-            <h2 className="text-[#E3C08D] font-seasons text-center text-xl mb-6">
-              Create your Bellavista account
-            </h2>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Names */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {["firstName", "lastName"].map((field, i) => (
-                  <div key={field}>
-                    <label className="text-[#E3C08D] block mb-1 font-seasons capitalize">
-                      {field.replace("Name", " name")}
-                    </label>
-                    <div className="relative">
-                      <User
-                        className="absolute top-3 left-3 text-[#E3C08D]"
-                        size={18}
-                      />
-                      <input
-                        type="text"
-                        name={field}
-                        value={(formData as any)[field]}
-                        onChange={handleInputChange}
-                        placeholder={
-                          field === "firstName" ? "ex: azemray" : "ex: oualid"
-                        }
-                        className="pl-10 p-2 w-full bg-[#1A1A1A] text-[#E3C08D] placeholder-[#E3C08D]/50 border border-[#E3C08D] rounded-md"
-                      />
-                    </div>
-                  </div>
-                ))}
               </div>
 
-              {/* Email */}
-              <div>
-                <label className="text-[#E3C08D] block mb-1 font-seasons">
-                  E-mail
-                </label>
-                <div className="relative">
-                  <Mail
-                    className="absolute top-3 left-3 text-[#E3C08D]"
-                    size={18}
-                  />
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    placeholder="you@example.com"
-                    className="pl-10 p-2 w-full bg-[#1A1A1A] text-[#E3C08D] placeholder-[#E3C08D]/50 border border-[#E3C08D] rounded-md"
-                  />
-                </div>
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label className="text-[#E3C08D] block mb-1 font-seasons">
-                  Phone
-                </label>
-                <div className="relative">
-                  <Phone
-                    className="absolute top-3 left-3 text-[#E3C08D]"
-                    size={18}
-                  />
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    placeholder="+212 600000000"
-                    className="pl-10 p-2 w-full bg-[#1A1A1A] text-[#E3C08D] placeholder-[#E3C08D]/50 border border-[#E3C08D] rounded-md"
-                  />
-                </div>
-              </div>
-
-              {/* Passwords */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {[
-                  { name: "password", icon: Lock, label: "Password" },
-                  {
-                    name: "verifyPassword",
-                    icon: ShieldCheck,
-                    label: "Confirm",
-                  },
-                ].map(({ name, icon: Icon, label }) => (
-                  <div key={name}>
-                    <label className="text-[#E3C08D] block mb-1 font-seasons">
-                      {label}
-                    </label>
-                    <div className="relative">
-                      <Icon
-                        className="absolute top-3 left-3 text-[#E3C08D]"
-                        size={18}
-                      />
-                      <input
-                        type="password"
-                        name={name}
-                        value={(formData as any)[name]}
-                        onChange={handleInputChange}
-                        placeholder="••••••••"
-                        className="pl-10 p-2 w-full bg-[#1A1A1A] text-[#E3C08D] placeholder-[#E3C08D]/50 border border-[#E3C08D] rounded-md"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Submit & Socials */}
-              <div className="flex flex-col items-center space-y-4">
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="flex items-center justify-center gap-2 bg-transparent border border-[#E3C08D] text-[#E3C08D] px-8 py-2 rounded-full hover:bg-[#E3C08D]/10 transition"
+              <div className="relative z-10">
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2, duration: 0.6 }}
                 >
-                  {isLoading ? "Signing up..." : "Sign Up"}
-                  <ChevronRight size={20} />
-                </button>
-
-                <div className="w-full flex items-center text-[#E3C08D]">
-                  <hr className="flex-grow border-[#E3C08D]" />
-                  <span className="px-2">Or</span>
-                  <hr className="flex-grow border-[#E3C08D]" />
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {["google", "facebook"].map((provider) => (
-                    <button
-                      key={provider}
-                      type="button"
-                      onClick={() => handleSocialLogin(provider)}
-                      className="flex items-center gap-2 border border-[#E3C08D] px-4 py-2 rounded-md bg-[#1A1A1A] text-[#E3C08D]"
-                    >
-                      <Image
-                        src={`/${provider}-icon.png`}
-                        alt={`${provider} logo`}
-                        width={20}
-                        height={20}
-                      />
-                      {provider.charAt(0).toUpperCase() + provider.slice(1)}
-                    </button>
-                  ))}
-                </div>
+                  <Image
+                    src="/logo.png"
+                    alt="Logo"
+                    width={80}
+                    height={80}
+                    className="mb-6"
+                  />
+                  <h1 className="text-[#E3C08D] text-6xl font-seasons mb-3">
+                    BELLAVISTA
+                  </h1>
+                  <div className="w-16 h-1 bg-[#E3C08D] my-6" />
+                  <p className="text-[#E3C08D] text-xl font-seasons leading-relaxed">
+                    Where Your Vacation Story Begins
+                  </p>
+                </motion.div>
               </div>
-            </form>
+
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6, duration: 0.8 }}
+                className="relative z-10 mt-16"
+              >
+                <p className="text-[#E3C08D]/80 mb-6">
+                  Already have an account? Sign in to access your bookings and
+                  preferences.
+                </p>
+                <Link
+                  href="/auth/login"
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#E3C08D]/10 border border-[#E3C08D] text-[#E3C08D] font-seasons text-lg hover:bg-[#E3C08D]/20 transition-all duration-300"
+                >
+                  <LogIn className="w-5 h-5" />
+                  Sign in to your account
+                </Link>
+              </motion.div>
+            </div>
+
+            {/* Right Content - Signup Form */}
+            <div className="bg-black/70 border-l border-[#E3C08D]/30 p-8 lg:p-10">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.6 }}
+              >
+                <h2 className="text-[#E3C08D] text-3xl font-seasons mb-6">
+                  Create Your Account
+                </h2>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Names Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[#E3C08D] block font-seasons">
+                        First Name
+                      </label>
+                      <div className="relative">
+                        <User
+                          className="absolute top-3 left-3 text-[#E3C08D]/70"
+                          size={18}
+                        />
+                        <input
+                          type="text"
+                          name="firstName"
+                          value={formData.firstName}
+                          onChange={handleInputChange}
+                          placeholder="ex: John"
+                          className="w-full bg-[#1A1A1A] border border-[#E3C08D]/50 rounded-lg pl-10 px-4 py-3 text-[#E3C08D] placeholder-[#E3C08D]/40 focus:border-[#E3C08D] focus:outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[#E3C08D] block font-seasons">
+                        Last Name
+                      </label>
+                      <div className="relative">
+                        <User
+                          className="absolute top-3 left-3 text-[#E3C08D]/70"
+                          size={18}
+                        />
+                        <input
+                          type="text"
+                          name="lastName"
+                          value={formData.lastName}
+                          onChange={handleInputChange}
+                          placeholder="ex: Smith"
+                          className="w-full bg-[#1A1A1A] border border-[#E3C08D]/50 rounded-lg pl-10 px-4 py-3 text-[#E3C08D] placeholder-[#E3C08D]/40 focus:border-[#E3C08D] focus:outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  <div className="space-y-2">
+                    <label className="text-[#E3C08D] block font-seasons">
+                      Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail
+                        className="absolute top-3 left-3 text-[#E3C08D]/70"
+                        size={18}
+                      />
+                      <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        placeholder="you@example.com"
+                        className="w-full bg-[#1A1A1A] border border-[#E3C08D]/50 rounded-lg pl-10 px-4 py-3 text-[#E3C08D] placeholder-[#E3C08D]/40 focus:border-[#E3C08D] focus:outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Phone */}
+                  <div className="space-y-2">
+                    <label className="text-[#E3C08D] block font-seasons">
+                      Phone Number
+                    </label>
+                    <div className="relative">
+                      <Phone
+                        className="absolute top-3 left-3 text-[#E3C08D]/70"
+                        size={18}
+                      />
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        placeholder="+1 (555) 123-4567"
+                        className="w-full bg-[#1A1A1A] border border-[#E3C08D]/50 rounded-lg pl-10 px-4 py-3 text-[#E3C08D] placeholder-[#E3C08D]/40 focus:border-[#E3C08D] focus:outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Passwords Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[#E3C08D] block font-seasons">
+                        Password
+                      </label>
+                      <div className="relative">
+                        <Lock
+                          className="absolute top-3 left-3 text-[#E3C08D]/70"
+                          size={18}
+                        />
+                        <input
+                          type="password"
+                          name="password"
+                          value={formData.password}
+                          onChange={handleInputChange}
+                          placeholder="••••••••"
+                          className="w-full bg-[#1A1A1A] border border-[#E3C08D]/50 rounded-lg pl-10 px-4 py-3 text-[#E3C08D] placeholder-[#E3C08D]/40 focus:border-[#E3C08D] focus:outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[#E3C08D] block font-seasons">
+                        Confirm Password
+                      </label>
+                      <div className="relative">
+                        <ShieldCheck
+                          className="absolute top-3 left-3 text-[#E3C08D]/70"
+                          size={18}
+                        />
+                        <input
+                          type="password"
+                          name="verifyPassword"
+                          value={formData.verifyPassword}
+                          onChange={handleInputChange}
+                          placeholder="••••••••"
+                          className="w-full bg-[#1A1A1A] border border-[#E3C08D]/50 rounded-lg pl-10 px-4 py-3 text-[#E3C08D] placeholder-[#E3C08D]/40 focus:border-[#E3C08D] focus:outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3 rounded-lg bg-[#E3C08D]/10 border border-[#E3C08D] text-[#E3C08D] font-seasons text-lg hover:bg-[#E3C08D]/20 transition-all"
+                  >
+                    {isLoading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg
+                          className="animate-spin h-5 w-5"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        Creating account...
+                      </span>
+                    ) : (
+                      "Create Account"
+                    )}
+                  </motion.button>
+
+                  <div className="mt-6">
+                    <div className="flex items-center">
+                      <div className="flex-grow h-px bg-[#E3C08D]/30" />
+                      <span className="px-4 text-[#E3C08D]/70 text-sm">
+                        Or sign up with
+                      </span>
+                      <div className="flex-grow h-px bg-[#E3C08D]/30" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mt-6">
+                      <SocialSignupButton
+                        icon="/google-icon.png"
+                        label="Google"
+                        onClick={() => handleSocialLogin("google")}
+                      />
+                      <SocialSignupButton
+                        icon="/facebook-icon.png"
+                        label="Facebook"
+                        onClick={() => handleSocialLogin("facebook")}
+                      />
+                    </div>
+                  </div>
+                </form>
+
+                <div className="mt-8 text-center text-[#E3C08D]/50 text-xs">
+                  <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+                    <Link
+                      href="/terms"
+                      className="hover:text-[#E3C08D]/80 transition-colors"
+                    >
+                      Terms
+                    </Link>
+                    <Link
+                      href="/privacy"
+                      className="hover:text-[#E3C08D]/80 transition-colors"
+                    >
+                      Privacy
+                    </Link>
+                    <Link
+                      href="/cookies"
+                      className="hover:text-[#E3C08D]/80 transition-colors"
+                    >
+                      Cookies
+                    </Link>
+                  </div>
+                  <div className="mt-2">
+                    © {new Date().getFullYear()} Bellavista. All rights
+                    reserved.
+                  </div>
+                </div>
+              </motion.div>
+            </div>
           </motion.div>
         </div>
       </div>
     </>
   );
 };
+
+const SocialSignupButton = ({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: string;
+  label: string;
+  onClick: () => void;
+}) => (
+  <motion.button
+    whileHover={{ scale: 1.02 }}
+    whileTap={{ scale: 0.98 }}
+    onClick={onClick}
+    type="button"
+    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1A1A1A] border border-[#E3C08D]/30 rounded-lg hover:border-[#E3C08D]/80 transition-all"
+  >
+    <Image src={icon} alt={label} width={20} height={20} />
+    <span className="text-[#E3C08D]">{label}</span>
+  </motion.button>
+);
 
 export default SignupPage;

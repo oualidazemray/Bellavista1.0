@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
@@ -44,6 +44,18 @@ const LoginPage = () => {
     rememberMe: false,
   });
   const [isLoading, setIsLoading] = useState(false);
+
+  // Check for remembered email on component mount
+  useEffect(() => {
+    const rememberedEmail = localStorage.getItem("rememberedEmail");
+    if (rememberedEmail) {
+      setFormData((prev) => ({
+        ...prev,
+        email: rememberedEmail,
+        rememberMe: true,
+      }));
+    }
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -129,136 +141,234 @@ const LoginPage = () => {
         </div>
 
         {/* Main Content */}
-        <div className="relative z-10 flex flex-col md:flex-row items-center justify-center min-h-screen p-6 gap-10">
-          {/* Left Section */}
+        <div className="relative z-10 flex justify-center items-center min-h-screen px-4 py-12">
           <motion.div
-            initial={{ opacity: 0, x: -40 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center md:text-left md:w-1/2 max-w-md space-y-6"
-          >
-            <h1 className="text-[#E3C08D] text-5xl font-seasons">BELLAVISTA</h1>
-            <p className="text-[#E3C08D] text-2xl font-seasons">
-              Where Your Vacation Story Begins
-            </p>
-            <Link
-              href="/signup"
-              className="text-[#E3C08D] flex items-center gap-2 font-seasons text-xl hover:underline"
-            >
-              Sign up now
-              <svg
-                className="w-5 h-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            </Link>
-          </motion.div>
-
-          {/* Right Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="w-full md:w-1/2 max-w-lg bg-black/80 border border-[#E3C08D] backdrop-blur-md rounded-3xl p-8"
+            transition={{ duration: 0.8 }}
+            className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-6 rounded-3xl overflow-hidden backdrop-blur-md"
           >
-            <div className="flex justify-center items-center gap-2 mb-6">
-              <Image
-                src="/logo.png"
-                alt="Logo"
-                width={50}
-                height={50}
-                className="object-contain"
-              />
-              <h1 className="text-[#E3C08D] text-3xl font-seasons">
-                Log in to your account
-              </h1>
+            {/* Left Content - Branding Panel */}
+            <div className="relative overflow-hidden bg-black/40 border-r border-[#E3C08D]/30 p-8 flex flex-col justify-between lg:min-h-[600px]">
+              <div className="absolute inset-0 z-0 opacity-20">
+                <Image
+                  src="/beachBack.jpg"
+                  alt="Background"
+                  fill
+                  style={{ objectFit: "cover" }}
+                />
+              </div>
+
+              <div className="relative z-10">
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2, duration: 0.6 }}
+                >
+                  <Image
+                    src="/logo.png"
+                    alt="Logo"
+                    width={80}
+                    height={80}
+                    className="mb-6"
+                  />
+                  <h1 className="text-[#E3C08D] text-6xl font-seasons mb-3">
+                    BELLAVISTA
+                  </h1>
+                  <div className="w-16 h-1 bg-[#E3C08D] my-6" />
+                  <p className="text-[#E3C08D] text-xl font-seasons leading-relaxed">
+                    Where Your Vacation Story Begins
+                  </p>
+                </motion.div>
+              </div>
+
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6, duration: 0.8 }}
+                className="relative z-10 mt-16"
+              >
+                <p className="text-[#E3C08D]/80 mb-6">
+                  New to Bellavista? Experience luxury and relaxation like never
+                  before.
+                </p>
+                <Link
+                  href="/auth/signup"
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#E3C08D]/10 border border-[#E3C08D] text-[#E3C08D] font-seasons text-lg hover:bg-[#E3C08D]/20 transition-all duration-300"
+                >
+                  Create an account
+                  <svg
+                    className="w-5 h-5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              </motion.div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label className="text-[#E3C08D] block mb-2 font-seasons">
-                  E-mail
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="your@email.com"
-                  className="w-full bg-[#1A1A1A] border border-[#E3C08D] rounded-md px-4 py-2 text-[#E3C08D] placeholder-[#E3C08D]/60"
-                />
-              </div>
-              <div>
-                <label className="text-[#E3C08D] block mb-2 font-seasons">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  placeholder="••••••••••••••"
-                  className="w-full bg-[#1A1A1A] border border-[#E3C08D] rounded-md px-4 py-2 text-[#E3C08D]"
-                />
-              </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="rememberMe"
-                  name="rememberMe"
-                  checked={formData.rememberMe}
-                  onChange={handleInputChange}
-                  className="accent-[#E3C08D] mr-2"
-                />
-                <label
-                  htmlFor="rememberMe"
-                  className="text-[#E3C08D] font-seasons"
-                >
-                  Remember me
-                </label>
-              </div>
+            {/* Right Content - Login Form */}
+            <div className="bg-black/70 border-l border-[#E3C08D]/30 p-8 lg:p-12">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.6 }}
+              >
+                <h2 className="text-[#E3C08D] text-3xl font-seasons mb-8">
+                  Welcome Back
+                </h2>
 
-              <div className="flex flex-col items-center gap-6 mt-4">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-32 py-2 rounded-full border border-[#E3C08D] text-[#E3C08D] hover:bg-[#E3C08D]/10 transition-all"
-                >
-                  {isLoading ? "Logging in..." : "Log in"}
-                </motion.button>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[#E3C08D] block font-seasons">
+                      E-mail
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      placeholder="your@email.com"
+                      className="w-full bg-[#1A1A1A] border border-[#E3C08D]/50 rounded-lg px-4 py-3 text-[#E3C08D] placeholder-[#E3C08D]/40 focus:border-[#E3C08D] focus:outline-none transition-all"
+                    />
+                  </div>
 
-                <div className="flex items-center w-full">
-                  <div className="flex-grow h-px bg-[#E3C08D]" />
-                  <span className="px-3 text-[#E3C08D]">Or</span>
-                  <div className="flex-grow h-px bg-[#E3C08D]" />
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[#E3C08D] block font-seasons">
+                        Password
+                      </label>
+                      <Link
+                        href="/forgot-password"
+                        className="text-[#E3C08D]/70 text-sm hover:text-[#E3C08D] transition-colors"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
+                    <input
+                      type="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      placeholder="••••••••••••••"
+                      className="w-full bg-[#1A1A1A] border border-[#E3C08D]/50 rounded-lg px-4 py-3 text-[#E3C08D] focus:border-[#E3C08D] focus:outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="rememberMe"
+                      name="rememberMe"
+                      checked={formData.rememberMe}
+                      onChange={handleInputChange}
+                      className="accent-[#E3C08D] w-4 h-4 mr-2"
+                    />
+                    <label
+                      htmlFor="rememberMe"
+                      className="text-[#E3C08D] font-seasons"
+                    >
+                      Remember me
+                    </label>
+                  </div>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3 rounded-lg bg-[#E3C08D]/10 border border-[#E3C08D] text-[#E3C08D] font-seasons text-lg hover:bg-[#E3C08D]/20 transition-all"
+                  >
+                    {isLoading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg
+                          className="animate-spin h-5 w-5"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        Logging in...
+                      </span>
+                    ) : (
+                      "Sign In"
+                    )}
+                  </motion.button>
+                </form>
+
+                <div className="mt-8">
+                  <div className="flex items-center">
+                    <div className="flex-grow h-px bg-[#E3C08D]/30" />
+                    <span className="px-4 text-[#E3C08D]/70 text-sm">
+                      Or continue with
+                    </span>
+                    <div className="flex-grow h-px bg-[#E3C08D]/30" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mt-6">
+                    <SocialLoginButton icon="/google-icon.png" label="Google" />
+                    <SocialLoginButton
+                      icon="/facebook-icon.png"
+                      label="Facebook"
+                    />
+                  </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
-                  <LoginButton src="/google-icon.png" label="Google" />
-                  <LoginButton src="/facebook-icon.png" label="Facebook" />
+                <div className="mt-10 text-center text-[#E3C08D]/50 text-xs">
+                  <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+                    <Link
+                      href="/terms"
+                      className="hover:text-[#E3C08D]/80 transition-colors"
+                    >
+                      Terms
+                    </Link>
+                    <Link
+                      href="/privacy"
+                      className="hover:text-[#E3C08D]/80 transition-colors"
+                    >
+                      Privacy
+                    </Link>
+                    <Link
+                      href="/cookies"
+                      className="hover:text-[#E3C08D]/80 transition-colors"
+                    >
+                      Cookies
+                    </Link>
+                    <Link
+                      href="/media"
+                      className="hover:text-[#E3C08D]/80 transition-colors"
+                    >
+                      Media Policy
+                    </Link>
+                    <Link
+                      href="/accessibility"
+                      className="hover:text-[#E3C08D]/80 transition-colors"
+                    >
+                      Accessibility
+                    </Link>
+                  </div>
+                  <div className="mt-2">
+                    © {new Date().getFullYear()} Bellavista. All rights
+                    reserved.
+                  </div>
                 </div>
-              </div>
-            </form>
-
-            <div className="mt-6 text-center text-[#E3C08D]/60 text-xs">
-              <div className="flex flex-wrap justify-center gap-2">
-                <Link href="/terms">Terms</Link>
-                <Link href="/privacy">Privacy</Link>
-                <Link href="/cookies">Cookies</Link>
-              </div>
-              <div className="mt-2 flex flex-wrap justify-center gap-2">
-                <Link href="/media">Media Policy</Link>
-                <Link href="/accessibility">Accessibility</Link>
-                <Link href="/signup">
-                  © {new Date().getFullYear()} Bellavista
-                </Link>
-              </div>
+              </motion.div>
             </div>
           </motion.div>
         </div>
@@ -267,14 +377,21 @@ const LoginPage = () => {
   );
 };
 
-const LoginButton = ({ src, label }: { src: string; label: string }) => (
+const SocialLoginButton = ({
+  icon,
+  label,
+}: {
+  icon: string;
+  label: string;
+}) => (
   <motion.button
-    whileHover={{ scale: 1.05 }}
-    whileTap={{ scale: 0.95 }}
-    className="flex items-center gap-2 px-4 py-2 w-full justify-center bg-[#1A1A1A] border border-[#E3C08D] rounded-md"
+    whileHover={{ scale: 1.02 }}
+    whileTap={{ scale: 0.98 }}
+    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1A1A1A] border border-[#E3C08D]/30 rounded-lg hover:border-[#E3C08D]/80 transition-all"
   >
-    <Image src={src} alt={label} width={20} height={20} />
+    <Image src={icon} alt={label} width={20} height={20} />
     <span className="text-[#E3C08D]">{label}</span>
   </motion.button>
 );
+
 export default LoginPage;
