@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-export default NextAuth({
+const handler = NextAuth({
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -17,7 +17,8 @@ export default NextAuth({
         const user = await prisma.user.findUnique({
           where: { email: credentials?.email },
         });
-
+        console.log("User found:", credentials?.email);
+        console.log("password:", credentials?.password);
         if (!user) {
           throw new Error("No user found with this email");
         }
@@ -29,7 +30,7 @@ export default NextAuth({
         if (!isValid) {
           throw new Error("Incorrect password");
         }
-
+        
         return {
           id: user.id,
           email: user.email,
@@ -40,7 +41,8 @@ export default NextAuth({
     }),
   ],
   pages: {
-    signIn: "/login",
+    signIn: "/auth/login",
+    error: "/auth/login",
   },
   callbacks: {
     async jwt({ token, user }) {
@@ -54,5 +56,8 @@ export default NextAuth({
       return session;
     },
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  
 });
+
+
+export { handler as GET, handler as POST };
