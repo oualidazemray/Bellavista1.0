@@ -109,8 +109,8 @@ export default function BookingSection({
   return (
     <section className="relative py-6 md:py-8 bg-gradient-to-b from-[#1a130e]/70 to-transparent">
       <div className="container mx-auto px-4">
-        <div className="rounded-2xl shadow-2xl overflow-hidden border border-amber-800/40">
-          <div className="bg-gradient-to-r from-amber-900 via-amber-950 to-black/80 text-white backdrop-blur-md p-4 md:p-6">
+        <div className="rounded-2xl shadow-2xl overflow-hidden border border-amber-500/40">
+          <div className="bg-gradient-to-b from-black to-[#1a130e]/70 text-white backdrop-blur-md p-4 md:p-6">
             <h2 className="text-2xl md:text-3xl font-serif text-amber-100">
               Book Your Perfect Stay
             </h2>
