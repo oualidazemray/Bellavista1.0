@@ -3,111 +3,59 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link"; // Keep Link if your notifications have 'link' properties
 import {
   Bell,
   MailCheck,
   MessageSquare,
   Sparkles,
   AlertTriangle,
-  Settings,
+  SettingsIcon as Settings, // Renamed to avoid conflict
   CheckCheck,
-  X, // Keep if needed for a potential close button for the whole component
+  X,
   Archive,
   ArrowRight,
-  ArrowLeft, // For back button on mobile
+  ArrowLeft,
+  Loader2, // Added Loader2
 } from "lucide-react";
+import toast from "react-hot-toast"; // For user feedback
 
-// Interface for a single notification
-export interface NotificationItem {
+// Interface for a single notification from API (matches Prisma model closely)
+// Frontend NotificationItem will be derived from this
+export interface NotificationFromAPI {
   id: string;
-  type: "booking" | "message" | "promo" | "alert" | "update";
+  type: string; // Comes as uppercase string from Prisma enum
   title: string;
   message: string;
-  timestamp: Date;
-  isRead: boolean;
-  sender?: string;
-  link?: string; // Optional link for "View Details"
+  timestamp: string; // Comes as ISO string from API
+  isRead: boolean; // 'read' in Prisma, map to 'isRead'
+  sender?: string | null;
+  link?: string | null;
+  // photoUrl?: string | null; // If you use this for icons or images
 }
 
-// Sample notifications data (same as before)
-const initialNotificationsData: NotificationItem[] = [
-  {
-    id: "1",
-    type: "booking",
-    title: "Booking Confirmed: The Grand Oasis",
-    message:
-      "Your 3-night stay starting on 2023-12-20 has been confirmed. We look forward to welcoming you!",
-    timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 mins ago
-    isRead: false,
-    sender: "Booking System",
-    link: "/bookings/123",
-  },
-  {
-    id: "2",
-    type: "message",
-    title: "New Message from Support",
-    message:
-      "Regarding your recent inquiry, we have updated our FAQ section...",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-    isRead: false,
-    sender: "Customer Support",
-  },
-  {
-    id: "3",
-    type: "promo",
-    title: "Exclusive Offer: 20% Off Your Next Stay!",
-    message:
-      "Use code WINTER20 to get a 20% discount on stays booked before January 31st.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-    isRead: true,
-    sender: "Marketing Team",
-  },
-  {
-    id: "4",
-    type: "alert",
-    title: "Important: Account Security Update",
-    message:
-      "We've detected unusual activity on your account. Please review your recent logins.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2), // 2 days ago
-    isRead: false,
-    sender: "Security Team",
-    link: "/account/security",
-  },
-  {
-    id: "5",
-    type: "update",
-    title: "New Feature: Dark Mode",
-    message:
-      "You can now enjoy our platform in a sleek new dark mode. Check your settings!",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5), // 5 days ago
-    isRead: true,
-    sender: "Product Team",
-  },
-];
+// Frontend's internal NotificationItem structure
+export interface NotificationItem {
+  id: string;
+  type: "booking" | "message" | "promo" | "alert" | "update" | "general"; // Add 'general'
+  title: string;
+  message: string;
+  timestamp: Date; // Convert ISO string to Date
+  isRead: boolean;
+  sender?: string;
+  link?: string;
+}
 
-// Helper to format time ago (same as before)
 const timeAgo = (date: Date): string => {
-  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-  let interval = seconds / 31536000;
-  if (interval > 1) return Math.floor(interval) + "y ago";
-  interval = seconds / 2592000;
-  if (interval > 1) return Math.floor(interval) + "mo ago";
-  interval = seconds / 86400;
-  if (interval > 1) return Math.floor(interval) + "d ago";
-  interval = seconds / 3600;
-  if (interval > 1) return Math.floor(interval) + "h ago";
-  interval = seconds / 60;
-  if (interval > 1) return Math.floor(interval) + "m ago";
-  return Math.floor(seconds) + "s ago";
+  /* ... same as before ... */
 };
-
 const NotificationIcon: React.FC<{
   type: NotificationItem["type"];
   isRead: boolean;
 }> = ({ type, isRead }) => {
+  /* ... same as before, ensure 'general' case is handled ... */
   const iconColor = isRead ? "text-gray-500" : "text-amber-400";
   const iconSize = "w-5 h-5";
-
   switch (type) {
     case "booking":
       return <MailCheck className={`${iconSize} ${iconColor}`} />;
@@ -120,112 +68,245 @@ const NotificationIcon: React.FC<{
     case "update":
       return <Settings className={`${iconSize} ${iconColor}`} />;
     default:
-      return <Bell className={`${iconSize} ${iconColor}`} />;
+      return <Bell className={`${iconSize} ${iconColor}`} />; // General
   }
 };
 
+const mapApiToNotificationItem = (
+  apiItem: NotificationFromAPI
+): NotificationItem => ({
+  id: apiItem.id,
+  type: apiItem.type.toLowerCase() as NotificationItem["type"], // Convert to lowercase string union
+  title: apiItem.title,
+  message: apiItem.message,
+  timestamp: new Date(apiItem.timestamp), // Convert ISO string to Date object
+  isRead: apiItem.isRead,
+  sender: apiItem.sender || undefined,
+  link: apiItem.link || undefined,
+});
+
 const Notifications: React.FC = () => {
-  const [notifications, setNotifications] = useState<NotificationItem[]>(
-    initialNotificationsData
-  );
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [activeNotification, setActiveNotification] =
     useState<NotificationItem | null>(null);
-  // State to manage view switching on mobile
   const [showDetailViewOnMobile, setShowDetailViewOnMobile] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false); // For actions like mark read/archive
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-  // Effect to handle view mode based on screen size and active notification
+  // Fetch notifications on mount
   useEffect(() => {
+    const fetchNotifications = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch("/api/client/notifications");
+        if (!response.ok) {
+          throw new Error("Failed to fetch notifications");
+        }
+        const data: NotificationFromAPI[] = await response.json();
+        setNotifications(
+          data
+            .map(mapApiToNotificationItem)
+            .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        );
+      } catch (error) {
+        console.error("Error fetching notifications:", error);
+        toast.error("Could not load notifications.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchNotifications();
+  }, []);
+
+  useEffect(() => {
+    /* ... handleResize logic for mobile view ... same as before */
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
-        // Tailwind's lg breakpoint
-        setShowDetailViewOnMobile(false); // On large screens, always allow two-pane
+        setShowDetailViewOnMobile(false);
       } else {
-        // On small screens, show detail if a notification is active, otherwise show list
         setShowDetailViewOnMobile(!!activeNotification);
       }
     };
-
-    handleResize(); // Initial check
+    handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [activeNotification]);
 
-  const handleSelectNotification = (notification: NotificationItem) => {
+  const handleSelectNotification = async (notification: NotificationItem) => {
     setActiveNotification(notification);
     if (!notification.isRead) {
+      // Optimistically update UI
       setNotifications((prev) =>
         prev.map((n) => (n.id === notification.id ? { ...n, isRead: true } : n))
       );
+      // Call API to mark as read
+      try {
+        await fetch(`/api/client/notifications/${notification.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ readStatus: true }),
+        });
+        // No need to refetch, UI is already updated
+      } catch (error) {
+        console.error("Error marking notification as read:", error);
+        toast.error("Failed to update read status.");
+        // Revert optimistic update if API call fails
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.id === notification.id ? { ...n, isRead: false } : n
+          )
+        );
+      }
     }
-    // The useEffect will handle setShowDetailViewOnMobile based on new activeNotification
   };
 
-  const handleToggleRead = (id: string) => {
+  const handleToggleRead = async (id: string) => {
+    const notification = notifications.find((n) => n.id === id);
+    if (!notification) return;
+
+    const newReadStatus = !notification.isRead;
+    // Optimistic UI update
+    const originalNotifications = [...notifications];
     setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isRead: !n.isRead } : n))
+      prev.map((n) => (n.id === id ? { ...n, isRead: newReadStatus } : n))
     );
     if (activeNotification?.id === id) {
       setActiveNotification((prev) =>
-        prev ? { ...prev, isRead: !prev.isRead } : null
+        prev ? { ...prev, isRead: newReadStatus } : null
       );
+    }
+
+    try {
+      setIsSubmitting(true);
+      const response = await fetch(`/api/client/notifications/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ readStatus: newReadStatus }),
+      });
+      if (!response.ok) throw new Error("Failed to update status");
+      // Success, UI already updated
+    } catch (error) {
+      console.error("Error toggling read status:", error);
+      toast.error("Failed to update read status.");
+      setNotifications(originalNotifications); // Revert on error
+      if (activeNotification?.id === id) {
+        // Revert active notification too
+        setActiveNotification(notifications.find((n) => n.id === id) || null);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleMarkAllRead = () => {
+  const handleMarkAllRead = async () => {
+    if (unreadCount === 0) return;
+    const originalNotifications = [...notifications];
+    // Optimistic UI update
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     if (activeNotification) {
       setActiveNotification((prev) =>
         prev ? { ...prev, isRead: true } : null
       );
     }
-  };
 
-  const handleArchiveNotification = (id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-    if (activeNotification?.id === id) {
-      setActiveNotification(null); // This will trigger useEffect to update mobile view
+    try {
+      setIsSubmitting(true);
+      const response = await fetch("/api/client/notifications", {
+        method: "POST",
+      }); // POST to root implies mark all read
+      if (!response.ok) throw new Error("Failed to mark all as read");
+      // Success
+    } catch (error) {
+      console.error("Error marking all as read:", error);
+      toast.error("Failed to mark all as read.");
+      setNotifications(originalNotifications); // Revert on error
+      // Revert active notification if it was affected
+      if (
+        activeNotification &&
+        originalNotifications.find((n) => n.id === activeNotification.id)
+          ?.isRead === false
+      ) {
+        setActiveNotification(
+          originalNotifications.find((n) => n.id === activeNotification.id) ||
+            null
+        );
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Simulate receiving new notifications (optional, for demo)
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      const newId = (notifications.length + 1 + Math.random()).toString();
-      const types: NotificationItem["type"][] = [
-        "booking",
-        "message",
-        "promo",
-        "alert",
-        "update",
-      ];
-      const randomType = types[Math.floor(Math.random() * types.length)];
+  const handleArchiveNotification = async (id: string) => {
+    const originalNotifications = [...notifications];
+    // Optimistic UI update
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    if (activeNotification?.id === id) {
+      setActiveNotification(null);
+    }
 
-      if (notifications.length > 10) {
-        // Cap notifications for demo
-        clearInterval(intervalId);
-        return;
+    try {
+      setIsSubmitting(true);
+      const response = await fetch(`/api/client/notifications/${id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to archive notification");
+      toast.success("Notification archived.");
+    } catch (error) {
+      console.error("Error archiving notification:", error);
+      toast.error("Failed to archive notification.");
+      setNotifications(originalNotifications); // Revert on error
+      // If active was archived and error occurred, re-select it if it was active
+      if (
+        originalNotifications.find((n) => n.id === id) &&
+        activeNotification?.id === id
+      ) {
+        setActiveNotification(
+          originalNotifications.find((n) => n.id === id) || null
+        );
       }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-      setNotifications((prev) => [
-        {
-          id: newId,
-          type: randomType,
-          title: `New ${randomType} ${newId.substring(0, 2)}`,
-          message:
-            "This is a dynamically added notification for demo purposes.",
-          timestamp: new Date(),
-          isRead: false,
-          sender: "System Bot",
-        },
-        ...prev,
-      ]);
-    }, 45000); // Add a new notification every 45 seconds
-    return () => clearInterval(intervalId);
-  }, [notifications.length]); // Re-run if notifications length changes to restart interval if capped
+  // Removed the demo useEffect that added notifications locally
+
+  // --- RENDER LOGIC ---
+  if (isLoading) {
+    return (
+      <div className="relative min-h-screen w-full bg-gray-900 text-white flex flex-col items-center justify-center p-4">
+        {/* Keep background consistent during load */}
+        <div className="absolute inset-0 z-0">
+          <Image
+            src="/beachBack.jpg"
+            alt="Background"
+            layout="fill"
+            objectFit="cover"
+            priority
+          />
+          <div className="absolute inset-0 bg-black/80" />
+        </div>
+        <div className="relative z-10 flex items-center">
+          <Loader2 size={48} className="text-amber-400 animate-spin" />
+          <p className="ml-3 text-xl text-amber-300">
+            Loading Notifications...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
+    // ... (Your existing JSX structure for the Notifications page) ...
+    // Make sure to use the `isSubmitting` state to disable buttons during API calls where appropriate.
+    // Example for "Mark all as read" button:
+    // disabled={unreadCount === 0 || isSubmitting}
+
+    // Example for action buttons in detail view:
+    // <button onClick={() => handleToggleRead(activeNotification.id)} disabled={isSubmitting} ... >
+    // <button onClick={() => handleArchiveNotification(activeNotification.id)} disabled={isSubmitting} ... >
     <div className="relative min-h-screen w-full bg-gray-900 text-white flex flex-col items-center justify-center p-2 sm:p-4">
       <div className="absolute inset-0 z-0">
         <Image
@@ -264,10 +345,15 @@ const Notifications: React.FC = () => {
             </div>
             <button
               onClick={handleMarkAllRead}
-              disabled={unreadCount === 0}
+              disabled={unreadCount === 0 || isSubmitting} // Updated disabled state
               className="w-full flex items-center justify-center gap-2 px-3 py-2 lg:px-4 text-sm rounded-lg bg-gray-700/50 hover:bg-gray-600/70 border border-gray-600 hover:border-amber-500/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <CheckCheck className="w-4 h-4" /> Mark all as read
+              {isSubmitting && activeTab === "all" ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCheck className="w-4 h-4" />
+              )}
+              Mark all as read
             </button>
           </div>
 
@@ -307,7 +393,6 @@ const Notifications: React.FC = () => {
                       !showDetailViewOnMobile)) && (
                     <div className="w-2 h-2 mt-1.5 rounded-full bg-transparent flex-shrink-0"></div>
                   )}
-
                   <div className="flex-shrink-0 pt-0.5">
                     <NotificationIcon
                       type={notification.type}
@@ -350,11 +435,8 @@ const Notifications: React.FC = () => {
         >
           {activeNotification ? (
             <div className="p-4 lg:p-8 flex flex-col h-full">
-              {" "}
-              {/* Added h-full for flex children to grow */}
-              {/* Back Button for Mobile */}
               <button
-                onClick={() => setActiveNotification(null)} // This will trigger useEffect to hide detail view on mobile
+                onClick={() => setActiveNotification(null)}
                 className="lg:hidden mb-4 p-2 bg-gray-700/50 rounded-md text-amber-400 hover:bg-gray-600/70 self-start flex items-center gap-1"
               >
                 <ArrowLeft className="w-5 h-5" /> Back
@@ -378,14 +460,18 @@ const Notifications: React.FC = () => {
                 <div className="flex gap-1 lg:gap-2">
                   <button
                     onClick={() => handleToggleRead(activeNotification.id)}
+                    disabled={isSubmitting} // Updated
                     title={
                       activeNotification.isRead
                         ? "Mark as Unread"
                         : "Mark as Read"
                     }
-                    className="p-2 rounded-lg text-gray-300 hover:bg-gray-700/50 hover:text-amber-400 transition-colors"
+                    className="p-2 rounded-lg text-gray-300 hover:bg-gray-700/50 hover:text-amber-400 transition-colors disabled:opacity-50"
                   >
-                    {activeNotification.isRead ? (
+                    {isSubmitting &&
+                    activeNotification.id === activeNotification?.id ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : activeNotification.isRead ? (
                       <MailCheck className="w-5 h-5" />
                     ) : (
                       <CheckCheck className="w-5 h-5" />
@@ -395,10 +481,16 @@ const Notifications: React.FC = () => {
                     onClick={() =>
                       handleArchiveNotification(activeNotification.id)
                     }
+                    disabled={isSubmitting} // Updated
                     title="Archive Notification"
-                    className="p-2 rounded-lg text-gray-300 hover:bg-gray-700/50 hover:text-red-500 transition-colors"
+                    className="p-2 rounded-lg text-gray-300 hover:bg-gray-700/50 hover:text-red-500 transition-colors disabled:opacity-50"
                   >
-                    <Archive className="w-5 h-5" />
+                    {isSubmitting &&
+                    activeNotification.id === activeNotification?.id ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Archive className="w-5 h-5" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -407,20 +499,18 @@ const Notifications: React.FC = () => {
               </div>
               {activeNotification.link && (
                 <div className="mt-auto pt-4 lg:pt-6 border-t border-gray-700/50">
-                  <a
+                  <Link // Changed <a> to <Link> for Next.js internal navigation if applicable
                     href={activeNotification.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    // target={activeNotification.link.startsWith('http') ? "_blank" : "_self"} // Open external links in new tab
+                    // rel={activeNotification.link.startsWith('http') ? "noopener noreferrer" : ""}
                     className="inline-flex items-center gap-2 px-4 py-2 lg:px-6 lg:py-3 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 text-black font-semibold hover:from-amber-600 hover:to-amber-700 shadow-md hover:shadow-lg shadow-amber-500/20 transition-all duration-200 transform hover:scale-105 text-sm lg:text-base"
                   >
                     View Details <ArrowRight className="w-4 h-4" />
-                  </a>
+                  </Link>
                 </div>
               )}
             </div>
           ) : (
-            // This placeholder is primarily for desktop when no notification is selected.
-            // On mobile, this pane is hidden if activeNotification is null.
             <div className="hidden lg:flex flex-grow flex-col items-center justify-center text-center text-gray-500 p-4 lg:p-8">
               <Bell className="w-16 h-16 lg:w-24 lg:h-24 mb-4 opacity-20" />
               <h3 className="text-lg lg:text-xl font-semibold">

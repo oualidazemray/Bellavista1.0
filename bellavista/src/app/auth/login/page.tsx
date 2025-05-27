@@ -81,7 +81,7 @@ const LoginPage = () => {
     setIsLoading(true);
     try {
       const result = await signIn("credentials", {
-        redirect: false,
+        redirect: false, // IMPORTANT: Keep redirect: false
         email: formData.email,
         password: formData.password,
       });
@@ -94,7 +94,9 @@ const LoginPage = () => {
             border: "1px solid #E3C08D",
           },
         });
-      } else {
+      } else if (result?.ok) {
+        // Check if signIn was successful (result.ok is true)
+        // Handle "Remember Me"
         formData.rememberMe
           ? localStorage.setItem("rememberedEmail", formData.email)
           : localStorage.removeItem("rememberedEmail");
@@ -109,10 +111,26 @@ const LoginPage = () => {
           </div>
         ));
 
-        setTimeout(() => router.push("/dashboard"), 1000);
+        // Instead of redirecting to a specific dashboard,
+        // redirect to the root or a generic post-login landing page.
+        // The middleware will then intercept this and redirect based on role.
+        // Using router.replace('/') is often good practice after login to prevent
+        // the login page from being in the browser history.
+        setTimeout(() => router.replace("/"), 1000); // Redirect to root, middleware handles the rest
+        // Or, if you have a specific "login success" page that middleware also checks:
+        // setTimeout(() => router.replace("/login-success"), 1000);
+      } else {
+        // Handle cases where result is not an error but also not explicitly ok (should be rare with redirect:false)
+        toast.error("Login failed. Please check your credentials.", {
+          style: {
+            /* your styles */
+          },
+        });
       }
-    } catch {
-      toast.error("An unexpected error occurred", {
+    } catch (error) {
+      // Catch network errors or other unexpected issues from signIn
+      console.error("Login error:", error);
+      toast.error("An unexpected error occurred during login.", {
         style: {
           background: "#000",
           color: "#E3C08D",

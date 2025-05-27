@@ -1,5 +1,5 @@
-// src/components/NavbarClient.tsx (or your preferred path for the navbar)
-"use client";
+// src/components/ui/client/ResponsiveNavbar.tsx
+"use client"; // This component is interactive
 
 import React, { useState, useEffect } from "react";
 import {
@@ -21,7 +21,7 @@ interface NavItemProps {
   hasNotification?: boolean;
   isCollapsed?: boolean;
   isActive?: boolean;
-  onClick: () => void;
+  onClick: () => void; // Keep onClick simple, it's called by the parent mapping
 }
 
 const NavItem: React.FC<NavItemProps> = ({
@@ -38,11 +38,12 @@ const NavItem: React.FC<NavItemProps> = ({
         ? "bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-white border border-amber-500/30 shadow-lg"
         : "text-slate-300 hover:text-white hover:bg-white/10 hover:shadow-md"
     }`}
-    onClick={onClick}
+    onClick={onClick} // The direct click handler
     style={{
       animation: isActive ? "pulse-glow 2s infinite" : "",
     }}
   >
+    {/* ... (rest of NavItem's beautiful styling - no changes needed here) ... */}
     <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-500/0 to-orange-500/0 group-hover:from-amber-500/10 group-hover:to-orange-500/10 transition-all duration-300 opacity-0 group-hover:opacity-100" />
     <div className="relative flex items-center gap-4 z-10 w-full">
       <div className="relative">
@@ -86,32 +87,34 @@ const NavItem: React.FC<NavItemProps> = ({
 
 // Define the items available in the navbar
 // Using a more robust identifier than just the label for activeItem logic
+// This should be defined in a way that ClientLayout can also access it if needed for initial state.
 export const NAV_ITEMS = [
-  { id: "reservations", icon: Calendar, label: "Facilities booking" },
+  { id: "reservations", icon: Calendar, label: "Facilities booking" }, // This might map to /client/dashboard
   { id: "profile", icon: Edit, label: "Edit profile" },
   { id: "history", icon: Clock, label: "History" },
   {
     id: "notifications",
     icon: Bell,
     label: "Notifications",
-    hasNotification: true,
+    hasNotification: true, // This could be dynamic later
   },
-  { id: "logout", icon: LogOut, label: "Logout" }, // Added logout to the main list
-];
+  // Logout is handled separately in the structure but defined here for consistency
+  { id: "logout", icon: LogOut, label: "Logout" },
+] as const; // Use "as const" for stricter typing of ids and labels
 
 export type NavItemId = (typeof NAV_ITEMS)[number]["id"];
 
 interface ResponsiveNavbarProps {
   activeItem: NavItemId;
-  onSelectItem: (itemId: NavItemId) => void;
-  userName?: string;
-  userRole?: string;
+  onSelectItem: (itemId: NavItemId) => void; // Called with the item's 'id'
+  userName?: string; // Comes from session
+  userRole?: string; // Comes from session, formatted for display
 }
 
 const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = ({
   activeItem,
   onSelectItem,
-  userName = "John Doe", // Default values or pass as props
+  userName = "Guest", // Default values
   userRole = "User",
 }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -126,13 +129,18 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = ({
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, []);
 
+  // Separate main items from logout for structural placement
   const mainNavItems = NAV_ITEMS.filter((item) => item.id !== "logout");
-  const logoutItem = NAV_ITEMS.find((item) => item.id === "logout");
+  const logoutItem = NAV_ITEMS.find((item) => item.id === "logout"); // Should always be found
 
   const getActiveLabel = () => {
-    return (
-      NAV_ITEMS.find((item) => item.id === activeItem)?.label || "Dashboard"
-    );
+    return NAV_ITEMS.find((item) => item.id === activeItem)?.label || "Menu"; // Default for mobile title
+  };
+
+  // This handles closing the mobile menu when an item is clicked inside it.
+  const handleMobileItemClick = (itemId: NavItemId) => {
+    onSelectItem(itemId);
+    setIsMobileMenuOpen(false);
   };
 
   return (
@@ -207,7 +215,7 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = ({
         }
       `}</style>
 
-      {/* Animated background elements (optional, keep if you like them) */}
+      {/* Animated background elements (optional) */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div
           className="absolute w-96 h-96 bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-full blur-3xl floating-bg-1 transition-transform duration-1000 ease-out"
@@ -234,22 +242,26 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = ({
       {/* Desktop Sidebar */}
       <div
         className={`hidden lg:flex fixed left-0 top-0 h-full z-50 transition-all duration-500 ease-out ${
-          isHovered ? "w-72" : "w-20"
-        }`} // Slightly reduced hover width
+          isHovered ? "w-72" : "w-20" // Sidebar width
+        }`}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
         <div className="relative h-full flex flex-col w-full">
+          {/* Background Styling */}
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl border-r border-white/10 shadow-2xl">
             <div className="absolute inset-0 bg-gradient-to-b from-slate-800/50 to-slate-900/80" />
             <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 to-orange-500/5 opacity-50" />
           </div>
+
+          {/* Content */}
           <div className="relative z-10 h-full flex flex-col">
+            {/* Profile Section */}
             <div className="p-6 border-b border-white/10">
               <div className="flex items-center gap-3">
                 <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg transform hover:scale-110 hover:rotate-3 transition-all duration-300 cursor-pointer gradient-animated">
-                  <User className="w-6 h-6 text-white" />
-                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 opacity-0 hover:opacity-30 transition-opacity duration-300" />
+                  <User className="w-6 h-6 text-white" />{" "}
+                  {/* Or user's actual profile picture if available */}
                 </div>
                 <div
                   className={`overflow-hidden transition-all duration-500 ${
@@ -258,16 +270,23 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = ({
                       : "opacity-0 -translate-x-4 w-0"
                   }`}
                 >
-                  <h3 className="text-white font-semibold text-lg truncate">
+                  <h3
+                    className="text-white font-semibold text-lg truncate"
+                    title={userName}
+                  >
                     {userName}
                   </h3>
-                  <p className="text-slate-400 text-sm truncate">{userRole}</p>
-                  {/* <div className="mt-2 w-full h-1 bg-slate-700 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-1000 ease-out" style={{width: isHovered ? "75%" : "0%", transitionDelay: isHovered ? "0.5s" : "0s",}}/>
-                  </div> */}
+                  <p
+                    className="text-slate-400 text-sm truncate"
+                    title={userRole}
+                  >
+                    {userRole}
+                  </p>
                 </div>
               </div>
             </div>
+
+            {/* Navigation Items */}
             <nav className="flex-1 py-6 space-y-2">
               {mainNavItems.map((item, index) => (
                 <div
@@ -281,12 +300,14 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = ({
                     hasNotification={item.hasNotification}
                     isCollapsed={!isHovered}
                     isActive={activeItem === item.id}
-                    onClick={() => onSelectItem(item.id)}
+                    onClick={() => onSelectItem(item.id)} // Pass item.id
                   />
                 </div>
               ))}
             </nav>
-            {logoutItem && (
+
+            {/* Logout Section */}
+            {logoutItem && ( // Ensure logoutItem exists
               <div className="p-4 border-t border-white/10">
                 <div className="transform hover:scale-105 active:scale-95 transition-transform duration-200">
                   <NavItem
@@ -294,11 +315,13 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = ({
                     label={logoutItem.label}
                     isCollapsed={!isHovered}
                     isActive={activeItem === logoutItem.id}
-                    onClick={() => onSelectItem(logoutItem.id)}
+                    onClick={() => onSelectItem(logoutItem.id)} // Pass 'logout' id
                   />
                 </div>
               </div>
             )}
+
+            {/* Expand hint */}
             {!isHovered && (
               <div
                 className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-50"
@@ -313,21 +336,20 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = ({
 
       {/* Mobile Top Navbar */}
       <div className="lg:hidden sticky top-0 z-40">
-        {" "}
-        {/* Made mobile navbar sticky */}
         <div className="relative bg-slate-900/90 backdrop-blur-xl border-b border-white/10 shadow-lg">
           <div className="absolute inset-0 bg-gradient-to-r from-slate-800/80 to-slate-900/80" />
           <div className="relative z-10 flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg active:scale-90 transition-transform duration-200 gradient-animated">
-                <User className="w-5 h-5 text-white" />
+                <User className="w-5 h-5 text-white" />{" "}
+                {/* Or user's profile pic */}
               </div>
               <div>
                 <h1 className="text-white font-semibold text-lg">
                   {getActiveLabel()}
                 </h1>
                 <p className="text-slate-400 text-xs">
-                  Welcome back, {userName.split(" ")[0]}
+                  Welcome, {userName ? userName.split(" ")[0] : "User"}
                 </p>
               </div>
             </div>
@@ -348,9 +370,11 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = ({
               </div>
             </button>
           </div>
+
+          {/* Mobile Menu Dropdown */}
           <div
             className={`overflow-hidden border-t border-white/10 bg-slate-900/95 backdrop-blur-xl transition-all duration-500 ease-out ${
-              isMobileMenuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+              isMobileMenuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0" // Adjust max-h if needed
             }`}
           >
             <div className="py-4 space-y-1">
@@ -363,37 +387,27 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = ({
                       : "translate-y-4 opacity-0"
                   }`}
                   style={{ transitionDelay: `${index * 0.05}s` }}
-                  onClick={() => {
-                    onSelectItem(item.id);
-                    setIsMobileMenuOpen(false);
-                  }}
+                  onClick={() => handleMobileItemClick(item.id)} // Use helper for mobile
                 >
-                  <NavItem
+                  <NavItem // Pass empty onClick as parent div handles it
                     icon={item.icon}
                     label={item.label}
                     hasNotification={item.hasNotification}
                     isActive={activeItem === item.id}
-                    onClick={() => {
-                      /* Handled by parent div's onClick */
-                    }}
+                    onClick={() => {}}
                   />
                 </div>
               ))}
               {logoutItem && (
                 <div
                   className="border-t border-white/10 mt-4 pt-4"
-                  onClick={() => {
-                    onSelectItem(logoutItem.id);
-                    setIsMobileMenuOpen(false);
-                  }}
+                  onClick={() => handleMobileItemClick(logoutItem.id)} // Use helper for mobile
                 >
-                  <NavItem
+                  <NavItem // Pass empty onClick
                     icon={logoutItem.icon}
                     label={logoutItem.label}
                     isActive={activeItem === logoutItem.id}
-                    onClick={() => {
-                      /* Handled by parent div's onClick */
-                    }}
+                    onClick={() => {}}
                   />
                 </div>
               )}

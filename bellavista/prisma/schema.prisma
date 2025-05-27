@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,32 +15,40 @@ enum Role {
   ADMIN
 }
 
-// Enum for Room.type (this was existing)
 enum RoomType {
-  SIMPLE         // e.g., for 1 guest, possibly single bed
-  DOUBLE         // e.g., for 2 guests, double bed or two twins
-  DOUBLE_CONFORT // e.g., larger double, potentially better amenities
-  SUITE          // e.g., largest, often with king bed, separate areas
+  SIMPLE
+  DOUBLE
+  DOUBLE_CONFORT
+  SUITE
 }
 
-// NEW: Enum for Room.view
 enum RoomView {
   CITY
   PARK
   POOL
   COURTYARD
   GARDEN
-  OCEAN // Example, if applicable
-  MOUNTAIN // Example, if applicable
+  OCEAN
+  MOUNTAIN
   OTHER
+}
+
+enum NotificationType {
+  BOOKING
+  MESSAGE
+  PROMO
+  ALERT
+  UPDATE
+  GENERAL // Fallback
 }
 
 enum ReservationStatus {
   PENDING
   CONFIRMED
-  CANCELED
+  CANCELED    // Spelled with one 'L' consistently
   CHECKED_IN
   CHECKED_OUT
+  COMPLETED   // Consider if this is distinct from CHECKED_OUT or just an alias for it
 }
 
 enum ReservationSource {
@@ -60,42 +70,45 @@ enum AlertType {
 }
 
 model User {
-  id                String           @id @default(cuid())
-  email             String           @unique
+  id                String    @id @default(cuid())
+  email             String    @unique
   password          String
   role              Role
-  isEmailVerified   Boolean          @default(false)
+  isEmailVerified   Boolean   @default(false)
   verificationToken String?
   tokenExpiry       DateTime?
-  name              String
+  name              String    // Corresponds to 'fullName' from frontend
   phone             String?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  reservations      Reservation[]
-  feedbacks         Feedback[]
-  notifications     Notification[]
-  assignedRooms     Room[]           @relation("AssignedRooms")
-  invoiceExports    InvoiceExport[]
-  agent             Agent?
-  admin             Admin?
-  profile           ClientProfile?
+  profileImageUrl   String?   // For user profile picture
+  bio               String?   // User's biography
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  reservations   Reservation[]
+  feedbacks      Feedback[]
+  notifications  Notification[]
+  assignedRooms  Room[]        @relation("AssignedRooms")
+  invoiceExports InvoiceExport[]
+  agent          Agent?
+  admin          Admin?
+  profile        ClientProfile? // For client-specific details like taxId
 }
 
 model ClientProfile {
   id        String   @id @default(cuid())
   user      User     @relation(fields: [userId], references: [id])
-  userId    String   @unique
+  userId    String   @unique // One-to-one with User
   taxId     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Agent {
-  id        String    @id @default(cuid())
-  user      User      @relation(fields: [userId], references: [id])
-  userId    String    @unique
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   services  Service[]
 }
 
@@ -103,61 +116,58 @@ model Admin {
   id          String   @id @default(cuid())
   user        User     @relation(fields: [userId], references: [id])
   userId      String   @unique
-  twoFASecret String? // Often optional
+  twoFASecret String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
 model Reservation {
-  id             String            @id @default(cuid())
-  client         User              @relation(fields: [clientId], references: [id])
-  clientId       String
-  rooms          Room[]            @relation("ReservationRooms") // Many-to-many with Room
-  checkIn        DateTime
-  checkOut       DateTime
-  status         ReservationStatus @default(PENDING)
-  totalPrice     Float
-  numAdults      Int               // Good to store for the reservation itself
-  numChildren    Int?              // Good to store for the reservation itself
-  promoCodeUsed  String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  invoices       Invoice[]
-  sourceLog      ReservationLog?
-  consumptions   ServiceConsumption[]
+  id            String            @id @default(cuid())
+  client        User              @relation(fields: [clientId], references: [id])
+  clientId      String
+  rooms         Room[]            @relation("ReservationRooms") // Many-to-many with Room
+  checkIn       DateTime
+  checkOut      DateTime
+  status        ReservationStatus @default(PENDING)
+  totalPrice    Float
+  numAdults     Int
+  numChildren   Int?
+  promoCodeUsed String?
+  createdAt     DateTime          @default(now()) // This is effectively the bookingDate
+  updatedAt     DateTime          @updatedAt
+
+  invoices      Invoice[]
+  sourceLog     ReservationLog?
+  consumptions  ServiceConsumption[]
+  feedbacks     Feedback[] // A reservation can have multiple feedbacks (e.g., if multiple guests)
+                           // Or Feedback? if only one primary feedback per reservation.
+                           // Let's assume multiple for now for flexibility.
 }
 
 model Room {
-  id              String        @id @default(cuid())
-  name            String        // e.g., "Deluxe King with City View"
-  description     String?
-  roomNumber      String        @unique
-  type            RoomType      // Use this for broad categorization
-  floor           Int
-  pricePerNight   Float
+  id               String        @id @default(cuid())
+  name             String
+  description      String?
+  roomNumber       String        @unique
+  type             RoomType
+  floor            Int
+  pricePerNight    Float
+  imageUrl         String?       // Main image URL for the room listing
+  imageUrls        String[]      // Gallery of images
+  maxGuests        Int
+  beds             Int?
+  bedConfiguration String?
+  view             RoomView?
+  characteristics  String[]
+  sqMeters         Float?
+  featured         Boolean       @default(false)
+  rating           Float?        // Average rating (e.g., 0-5)
 
-  imageUrl  String?    // Main image URL for the room listing (single image)
-  imageUrls String[]   // For a gallery of images (array of strings)
-  // available    Boolean @default(true) // Dynamic: determined by checking bookings
-  
-  // --- FIELDS ADDED/MODIFIED FOR FILTERING & DISPLAY ---
-  maxGuests       Int           // Crucial for guest count filtering
-  beds            Int?          // Number of physical beds (e.g., 1 or 2)
-  bedConfiguration String?      // More descriptive, e.g., "1 King", "2 Twin", "1 Queen + 1 Sofa Bed"
-  view            RoomView?     // For view filtering (e.g., CITY, POOL)
-  characteristics String[]      // For amenities filtering (e.g., ["internet", "ac", "balcony"])
-  sqMeters        Float?        // Room size
-  imageUrl        String?       // Main image URL for the room listing
-  imageUrls       String[]      // For a gallery of images
-  featured        Boolean       @default(false) // For "recommended" sort or highlighting
-  rating          Float?        // Average rating (e.g., 0-5), for "recommended" sort
-  // --- END ADDED/MODIFIED FIELDS ---
-
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  reservations    Reservation[] @relation("ReservationRooms") // Connects to reservations this room is part of
-  assignedTo      User?         @relation("AssignedRooms", fields: [assignedToId], references: [id]) // For housekeeping assignments
-  assignedToId    String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  reservations Reservation[] @relation("ReservationRooms")
+  assignedTo   User?         @relation("AssignedRooms", fields: [assignedToId], references: [id])
+  assignedToId String?
 }
 
 model Invoice {
@@ -182,22 +192,34 @@ model InvoiceExport {
 }
 
 model Notification {
-  id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id])
+  id        String           @id @default(cuid())
+  user      User             @relation(fields: [userId], references: [id])
   userId    String
+  type      NotificationType @default(GENERAL) // From your frontend needs
+  title     String           // From your frontend needs
   message   String
+  sender    String?          // From your frontend needs
   photoUrl  String?
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
+  link      String?          // From your frontend needs
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model Feedback {
-  id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
-  message   String
-  photoUrl  String?
-  createdAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id]) // Who submitted
+  userId        String
+  reservation   Reservation @relation(fields: [reservationId], references: [id]) // Which reservation
+  reservationId String
+  rating        Int      // Star rating (e.g., 1-5)
+  message       String
+  photoUrl      String?  // Optional photo with feedback
+  createdAt     DateTime @default(now())
+
+  // Optional: if one user can only submit one feedback PER reservation
+  @@unique([userId, reservationId], name: "user_reservation_feedback")
 }
 
 model Service {
@@ -228,19 +250,24 @@ model HotelInfo {
   address   String
   city      String
   stars     Int
-  latitude  Float? // Optional
-  longitude Float? // Optional
+  latitude  Float?
+  longitude Float?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  // pricing Float // 'pricing' on HotelInfo seems too general, room prices are on Room model
 }
 
 model ReservationLog {
-  id            String            @id @default(cuid())
+  id            String            @id @default(cuid()) // Added ID for the log entry itself
   reservation   Reservation       @relation(fields: [reservationId], references: [id])
-  reservationId String            @unique
+   reservationId String            @unique       // This can be non-unique if a reservation has multiple log entries,
+                                  // but if it's just one entry for source, then unique on reservation is fine.
+                                  // Your previous schema had it @unique on reservation, so keeping that.
+                                  // If Reservation.sourceLog is ReservationLog?, then this is a one-to-one.
   source        ReservationSource
   createdAt     DateTime          @default(now())
+  // Removed duplicated User fields from here, as they were out of place for a reservation source log.
+  // If you need to log which user created it AND which client it's for, that's different.
+  // The Reservation model already links to the client (User).
 }
 
 model Alert {

@@ -13,12 +13,14 @@ import DashboardPageForLayout from "./client/dashboard/page";
 export default function HomePage() {
   return (
     <div className="min-h-screen">
-      {/* <Navbar />
-      <LandingPage /> <BookingOptionsPage /> 
-      <RoomsPage />*/}
+      {/* 
+      <BookingOptionsPage /> 
+      <RoomsPage />
       <ClientLayout>
         <DashboardPageForLayout />
-      </ClientLayout>
+      </ClientLayout>*/}
+      <Navbar />
+      <LandingPage />
     </div>
   );
 }

@@ -1,281 +1,271 @@
-// prisma/seed.ts
 import {
   PrismaClient,
   Role,
   RoomType,
   RoomView,
   ReservationStatus,
-  ReservationSource,
+  NotificationType,
 } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log(`Start seeding ...`);
+  console.log("Start seeding ...");
 
-  // --- Create Users (Client, Agent, Admin) ---
-  const clientUser = await prisma.user.upsert({
-    where: { email: "client@example.com" },
-    update: {},
+  // --- User Credentials ---
+  const userEmail = "ay@gmail.com";
+  const userPassword = "ay@gmail.comay@gmail.comay@gmail.com"; // The password you provided
+
+  // --- Create or Update User 'ay@gmail.com' ---
+  const saltRounds = 10;
+  const hashedPassword = await bcrypt.hash(userPassword, saltRounds);
+
+  let targetUser = await prisma.user.upsert({
+    where: { email: userEmail },
+    update: {
+      // Update these fields if user already exists
+      name: "oualid ads", // Or the correct full name
+      password: hashedPassword, // Update password if it changed
+      phone: "0657983711", // Example phone
+      profileImageUrl: "/profile-placeholder.png",
+      bio: "sdaaaaaa ay@gmail.com",
+      role: Role.CLIENT, // Ensure role is client
+      isEmailVerified: true, // Assuming verified for seed
+    },
     create: {
-      email: "client@example.com",
-      password: "password123", // In a real app, hash this!
-      name: "Test Client",
+      email: userEmail,
+      name: "Aymane Client", // Or the correct full name
+      password: hashedPassword,
       role: Role.CLIENT,
       isEmailVerified: true,
+      phone: "0600000000",
+      profileImageUrl:
+        "https://www.freepik.com/premium-vector/person-profile-avatar-silhouette-user-icon-placeholder-human-anonymous-identity_412255457.htm",
+      bio: "Enjoys modern art and quiet retreats. Frequent traveler.",
       profile: {
+        // ClientProfile specific data
         create: {
-          taxId: "CLIENT_TAX_ID_123",
+          taxId: "AYM789TAX", // Example taxId
         },
       },
     },
     include: { profile: true },
   });
   console.log(
-    `Created/Found client user: ${clientUser.email} with profile ID: ${clientUser.profile?.id}`
+    `Upserted user: ${targetUser.name} (ID: ${targetUser.id}) with email ${targetUser.email}`
   );
 
-  const agentUser = await prisma.user.upsert({
-    where: { email: "agent@example.com" },
+  // --- Create Rooms (Ensure these exist or create them) ---
+  const room1 = await prisma.room.upsert({
+    where: { roomNumber: "101" },
     update: {},
     create: {
-      email: "agent@example.com",
-      password: "password123",
-      name: "Test Agent",
-      role: Role.AGENT,
-      isEmailVerified: true,
-      agent: {
-        create: {},
-      },
-    },
-    include: { agent: true },
-  });
-  console.log(
-    `Created/Found agent user: ${agentUser.email} with agent ID: ${agentUser.agent?.id}`
-  );
-
-  const adminUser = await prisma.user.upsert({
-    where: { email: "admin@example.com" },
-    update: {},
-    create: {
-      email: "admin@example.com",
-      password: "password123",
-      name: "Test Admin",
-      role: Role.ADMIN,
-      isEmailVerified: true,
-      admin: {
-        create: {
-          twoFASecret: "SUPERSECRET2FAKEY", // Example
-        },
-      },
-    },
-    include: { admin: true },
-  });
-  console.log(
-    `Created/Found admin user: ${adminUser.email} with admin ID: ${adminUser.admin?.id}`
-  );
-
-  // --- Create Rooms ---
-  const roomsToCreate = [
-    {
-      name: "Deluxe King with City View",
-      description:
-        "A spacious deluxe room offering stunning city views and a plush king-size bed.",
+      name: "Deluxe Ocean View King",
       roomNumber: "101",
-      type: RoomType.SUITE, // Or DOUBLE_CONFORT if more appropriate
+      type: RoomType.SUITE,
       floor: 1,
       pricePerNight: 250.0,
+      imageUrl:
+        "https://images.pexels.com/photos/261102/pexels-photo-261102.jpeg?auto=compress&cs=tinysrgb&w=600",
+      imageUrls: [
+        "https://images.pexels.com/photos/261102/pexels-photo-261102.jpeg?auto=compress&cs=tinysrgb&w=600",
+      ],
       maxGuests: 2,
       beds: 1,
       bedConfiguration: "1 King Bed",
-      view: RoomView.CITY,
-      characteristics: ["internet", "ac", "balcony", "tv", "minibar"],
+      view: RoomView.OCEAN,
+      characteristics: ["wifi", "ac", "balcony"],
       sqMeters: 45.5,
-      imageUrl:
-        "https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-      imageUrls: [
-        "https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-        "https://images.pexels.com/photos/164595/pexels-photo-164595.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-      ],
       featured: true,
       rating: 4.8,
     },
-    {
-      name: "Standard Twin with Park View",
-      description:
-        "Comfortable room with two twin beds and a peaceful park view.",
-      roomNumber: "102",
+  });
+  const room2 = await prisma.room.upsert({
+    where: { roomNumber: "205" },
+    update: {},
+    create: {
+      name: "Standard City View Twin",
+      roomNumber: "205",
       type: RoomType.DOUBLE,
-      floor: 1,
-      pricePerNight: 150.0,
+      floor: 2,
+      pricePerNight: 120.0,
+      imageUrl:
+        "https://images.pexels.com/photos/1838554/pexels-photo-1838554.jpeg?auto=compress&cs=tinysrgb&w=600",
+      imageUrls: [
+        "https://images.pexels.com/photos/1838554/pexels-photo-1838554.jpeg?auto=compress&cs=tinysrgb&w=600",
+      ],
       maxGuests: 2,
       beds: 2,
       bedConfiguration: "2 Twin Beds",
-      view: RoomView.PARK,
-      characteristics: ["internet", "tv", "ac"],
-      sqMeters: 30.0,
-      imageUrl:
-        "https://images.pexels.com/photos/262048/pexels-photo-262048.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-      imageUrls: [],
-      featured: false,
-      rating: 4.2,
+      view: RoomView.CITY,
+      characteristics: ["wifi", "ac", "tv"],
+      sqMeters: 25.0,
+    },
+  });
+  console.log(`Upserted rooms 101 and 205.`);
+
+  // --- Create Reservations for targetUser (ay@gmail.com) ---
+  const now = new Date();
+  // Upcoming
+  const upcomingCheckIn = new Date(now);
+  upcomingCheckIn.setDate(now.getDate() + 5); // 5 days from now
+  const upcomingCheckOut = new Date(upcomingCheckIn);
+  upcomingCheckOut.setDate(upcomingCheckIn.getDate() + 3); // 3 nights
+
+  // Completed
+  const completedCheckOut = new Date(now);
+  completedCheckOut.setDate(now.getDate() - 10); // Checked out 10 days ago
+  const completedCheckIn = new Date(completedCheckOut);
+  completedCheckIn.setDate(completedCheckOut.getDate() - 2); // 2 night stay
+
+  // Cancelled
+  const cancelledCheckIn = new Date(now);
+  cancelledCheckIn.setDate(now.getDate() - 30); // Was supposed to be 30 days ago
+  const cancelledCheckOut = new Date(cancelledCheckIn);
+  cancelledCheckOut.setDate(cancelledCheckIn.getDate() + 4);
+
+  const reservationsForTargetUser = [
+    {
+      id: "seed-res-ay-001-upcoming",
+      rooms: { connect: [{ id: room1.id }] },
+      checkIn: upcomingCheckIn,
+      checkOut: upcomingCheckOut,
+      status: ReservationStatus.CONFIRMED,
+      totalPrice: room1.pricePerNight * 3,
+      numAdults: 2,
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10), // Booked 10 days ago
     },
     {
-      name: "Cozy Single Room",
-      description:
-        "Perfect for solo travelers, a cozy room with all essentials.",
-      roomNumber: "201",
-      type: RoomType.SIMPLE,
-      floor: 2,
-      pricePerNight: 90.0,
-      maxGuests: 1,
-      beds: 1,
-      bedConfiguration: "1 Single Bed",
-      view: RoomView.COURTYARD,
-      characteristics: ["internet", "tv"],
-      sqMeters: 20.0,
-      imageUrl:
-        "https://images.pexels.com/photos/279746/pexels-photo-279746.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-      imageUrls: [],
-      featured: false,
-      rating: 4.0,
+      id: "seed-res-ay-002-completed",
+      rooms: { connect: [{ id: room2.id }] },
+      checkIn: completedCheckIn,
+      checkOut: completedCheckOut,
+      status: ReservationStatus.CHECKED_OUT,
+      totalPrice: room2.pricePerNight * 2,
+      numAdults: 1,
+      createdAt: new Date(completedCheckIn.getTime() - 1000 * 60 * 60 * 24 * 7), // Booked 7 days before check-in
     },
     {
-      name: "Family Suite with Pool View",
-      description: "Large suite ideal for families, overlooking the pool.",
-      roomNumber: "305",
-      type: RoomType.SUITE,
-      floor: 3,
-      pricePerNight: 350.0,
-      maxGuests: 4, // e.g., 2 adults, 2 children
-      beds: 2,
-      bedConfiguration: "1 King Bed, 1 Sofa Bed",
-      view: RoomView.POOL,
-      characteristics: [
-        "internet",
-        "ac",
-        "balcony",
-        "tv",
-        "minibar",
-        "bathtub",
-      ],
-      sqMeters: 60.0,
-      imageUrl:
-        "https://images.pexels.com/photos/261102/pexels-photo-261102.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-      imageUrls: [],
-      featured: true,
-      rating: 4.6,
-    },
-    {
-      name: "Accessible Queen Room",
-      description: "A comfortable and accessible room with a queen bed.",
-      roomNumber: "105",
-      type: RoomType.DOUBLE_CONFORT,
-      floor: 1,
-      pricePerNight: 180.0,
-      maxGuests: 2,
-      beds: 1,
-      bedConfiguration: "1 Queen Bed",
-      view: RoomView.GARDEN,
-      characteristics: ["internet", "ac", "accessible_bathroom"], // Add specific characteristics
-      sqMeters: 35.0,
-      imageUrl:
-        "https://images.pexels.com/photos/3659681/pexels-photo-3659681.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
-      imageUrls: [],
-      featured: false,
-      rating: 4.4,
+      id: "seed-res-ay-003-cancelled",
+      rooms: { connect: [{ id: room1.id }] },
+      checkIn: cancelledCheckIn,
+      checkOut: cancelledCheckOut,
+      status: ReservationStatus.CANCELED, // <<< CANCELLED STATUS
+      totalPrice: room1.pricePerNight * 4,
+      numAdults: 1,
+      numChildren: 0,
+      createdAt: new Date(cancelledCheckIn.getTime() - 1000 * 60 * 60 * 24 * 5), // Booked 5 days before original check-in
     },
   ];
 
-  for (const roomData of roomsToCreate) {
-    const room = await prisma.room.upsert({
-      where: { roomNumber: roomData.roomNumber },
-      update: roomData, // Update if it exists, in case you re-run the seed
-      create: roomData,
-    });
-    console.log(
-      `Created/Updated room: ${room.name} (Number: ${room.roomNumber})`
-    );
-  }
-
-  // --- Create a Sample Reservation ---
-  // Get a client and a couple of rooms to create a reservation
-  const sampleClient = await prisma.user.findUnique({
-    where: { email: "client@example.com" },
-  });
-  const room101 = await prisma.room.findUnique({
-    where: { roomNumber: "101" },
-  });
-  const room102 = await prisma.room.findUnique({
-    where: { roomNumber: "102" },
-  });
-
-  if (sampleClient && room101 && room102) {
-    // Check if a reservation for this client and room already exists for these dates to avoid duplicates if re-seeding
-    const existingReservation = await prisma.reservation.findFirst({
-      where: {
-        clientId: sampleClient.id,
-        checkIn: new Date("2024-09-10T14:00:00.000Z"), // Example check-in
-        rooms: { some: { id: room101.id } }, // Check if room101 is part of it
+  for (const resData of reservationsForTargetUser) {
+    await prisma.reservation.upsert({
+      where: { id: resData.id },
+      update: {
+        // Ensure key fields are updated if record exists
+        status: resData.status,
+        checkIn: resData.checkIn,
+        checkOut: resData.checkOut,
+        totalPrice: resData.totalPrice,
+      },
+      create: {
+        ...resData,
+        clientId: targetUser.id, // Link to ay@gmail.com user
       },
     });
-
-    if (!existingReservation) {
-      const reservation1 = await prisma.reservation.create({
-        data: {
-          clientId: sampleClient.id,
-          rooms: {
-            connect: [{ id: room101.id }, { id: room102.id }], // Connecting two rooms to this reservation
-          },
-          checkIn: new Date("2024-09-10T14:00:00.000Z"), // Example check-in
-          checkOut: new Date("2024-09-12T11:00:00.000Z"), // Example check-out
-          status: ReservationStatus.CONFIRMED,
-          totalPrice: (room101.pricePerNight + room102.pricePerNight) * 2, // Price for 2 nights for both rooms
-          numAdults: 2,
-          numChildren: 1,
-          sourceLog: {
-            create: {
-              source: ReservationSource.WEB,
-            },
-          },
-        },
-      });
-      console.log(
-        `Created reservation ID: ${reservation1.id} for client ${sampleClient.email}`
-      );
-    } else {
-      console.log(
-        `Reservation for client ${sampleClient.email} and room ${room101.name} on 2024-09-10 already exists.`
-      );
-    }
-  } else {
     console.log(
-      "Could not create sample reservation: client or room not found."
+      `Upserted reservation ${resData.id} for ${targetUser.name} with status ${resData.status}`
     );
   }
 
-  // --- Create HotelInfo (if you have only one hotel record) ---
-  const hotelInfo = await prisma.hotelInfo.upsert({
-    where: { name: "The Grand Example Hotel" }, // Use a unique field like name
-    update: {
-      address: "123 Luxury Lane",
-      city: "Metropolis",
-      stars: 5,
-      latitude: 34.0522,
-      longitude: -118.2437,
-    },
-    create: {
-      name: "The Grand Example Hotel",
-      address: "123 Luxury Lane",
-      city: "Metropolis",
-      stars: 5,
-      latitude: 34.0522,
-      longitude: -118.2437,
-    },
+  // --- Create Feedback for a Completed Reservation (seed-res-ay-002-completed) ---
+  const completedReservationForFeedback = await prisma.reservation.findUnique({
+    where: { id: "seed-res-ay-002-completed" },
   });
-  console.log(`Created/Updated hotel info: ${hotelInfo.name}`);
+  if (completedReservationForFeedback) {
+    await prisma.feedback.upsert({
+      where: {
+        user_reservation_feedback: {
+          userId: targetUser.id,
+          reservationId: completedReservationForFeedback.id,
+        },
+      },
+      update: {
+        rating: 5, // Update rating if feedback already exists
+        message:
+          "Absolutely wonderful experience! The city view was spectacular and the service was top-notch. Highly recommend this room.",
+      },
+      create: {
+        userId: targetUser.id,
+        reservationId: completedReservationForFeedback.id,
+        rating: 5,
+        message:
+          "Absolutely wonderful experience! The city view was spectacular and the service was top-notch. Highly recommend this room.",
+        createdAt: new Date(
+          completedReservationForFeedback.checkOut.getTime() +
+            1000 * 60 * 60 * 24
+        ), // Day after checkout
+      },
+    });
+    console.log(
+      `Upserted feedback for reservation ${completedReservationForFeedback.id} by ${targetUser.name}`
+    );
+  }
 
-  console.log(`Seeding finished.`);
+  // --- Create Notifications for targetUser (ay@gmail.com) ---
+  const notificationsForTargetUser = [
+    {
+      type: NotificationType.BOOKING,
+      title: `Your booking for ${room1.name} is Confirmed!`,
+      message: `Get ready for your stay starting ${upcomingCheckIn.toLocaleDateString()}. We're excited to welcome you!`,
+      sender: "Bellavista Reservations",
+      link: `/client/history?reservationId=seed-res-ay-001-upcoming`,
+      createdAt: new Date(Date.now() - 1000 * 60 * 10),
+    }, // 10 mins ago
+    {
+      type: NotificationType.PROMO,
+      title: "Loyalty Member Discount",
+      message:
+        "As a valued guest, enjoy an exclusive 15% off your next booking with code LOYAL15.",
+      sender: "Bellavista Rewards",
+      link: "/promos/loyal",
+      read: true,
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5),
+    }, // 5 days ago
+  ];
+
+  for (const nt of notificationsForTargetUser) {
+    // Simple create for notifications; for upsert, you'd need a reliable unique key other than ID
+    const existingNotification = await prisma.notification.findFirst({
+      where: {
+        userId: targetUser.id,
+        title: nt.title,
+        message: nt.message.substring(0, 50),
+      },
+    });
+    if (!existingNotification) {
+      await prisma.notification.create({
+        data: {
+          userId: targetUser.id,
+          type: nt.type,
+          title: nt.title,
+          message: nt.message,
+          sender: nt.sender,
+          link: nt.link,
+          read: nt.read || false,
+          createdAt: nt.createdAt,
+        },
+      });
+      console.log(`Created notification for ${targetUser.name}: ${nt.title}`);
+    } else {
+      console.log(
+        `Skipped existing notification for ${targetUser.name}: ${nt.title}`
+      );
+    }
+  }
+
+  console.log("Seeding finished.");
 }
 
 main()
