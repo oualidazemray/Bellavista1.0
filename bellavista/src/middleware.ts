@@ -5,10 +5,6 @@ import { getToken } from "next-auth/jwt"; // <--- Use NextAuth's getToken
 
 // JWT_SECRET_STRING_FROM_ENV is still needed for getToken
 const JWT_SECRET_STRING_FROM_ENV = process.env.NEXTAUTH_SECRET;
-console.log(
-  "MIDDLEWARE: process.env.NEXTAUTH_SECRET as seen by middleware:",
-  JWT_SECRET_STRING_FROM_ENV
-);
 
 if (!JWT_SECRET_STRING_FROM_ENV) {
   console.error(
@@ -33,9 +29,6 @@ interface UserPayloadFromNextAuthToken {
 async function getUserFromNextAuthToken(
   request: NextRequest
 ): Promise<UserPayloadFromNextAuthToken | null> {
-  console.log(
-    "MIDDLEWARE: getUserFromNextAuthToken - Attempting with NextAuth getToken"
-  );
   try {
     const token = await getToken({
       req: request,
@@ -45,11 +38,6 @@ async function getUserFromNextAuthToken(
       // cookieName: 'custom-session-cookie',
       // secureCookie: request.nextUrl.protocol === 'https:',
     });
-
-    console.log(
-      "MIDDLEWARE: getUserFromNextAuthToken - Token decoded by NextAuth getToken:",
-      token
-    );
 
     if (
       token &&
@@ -120,9 +108,6 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith("/auth/login") ||
       pathname.startsWith("/auth/signup")
     ) {
-      console.log(
-        `MIDDLEWARE: Authenticated user (${user.role}) on auth page '${pathname}', redirecting to dashboard.`
-      );
       if (user.role === "CLIENT")
         return NextResponse.redirect(new URL("/client/dashboard", request.url));
       if (user.role === "AGENT")
@@ -133,9 +118,6 @@ export async function middleware(request: NextRequest) {
     }
 
     if (pathname === "/") {
-      console.log(
-        `MIDDLEWARE: Authenticated user (${user.role}) on root path, redirecting to dashboard.`
-      );
       if (user.role === "CLIENT")
         return NextResponse.redirect(new URL("/client/dashboard", request.url));
       if (user.role === "AGENT")
@@ -155,9 +137,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   } else if (request.cookies.has(sessionCookieName) && !user) {
     // Cookie exists, but getToken failed (invalid/expired)
-    console.log(
-      "MIDDLEWARE: Session cookie present but getToken failed. Clearing cookies."
-    );
+
     if (!pathname.startsWith("/auth/login")) {
       const response = NextResponse.redirect(
         new URL("/auth/login?error=session_invalid_or_expired", request.url)

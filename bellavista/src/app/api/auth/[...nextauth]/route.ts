@@ -4,11 +4,6 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
-console.log(
-  "NEXTAUTH_HANDLER: process.env.NEXTAUTH_SECRET:",
-  process.env.NEXTAUTH_SECRET
-);
-
 export const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
@@ -41,9 +36,6 @@ export const authOptions: AuthOptions = {
           throw new Error("Incorrect password");
         }
 
-        console.log(
-          `AUTH: User ${user.email} authorized. Role: ${user.role}, ID: ${user.id}`
-        );
         return {
           id: user.id,
           email: user.email,
@@ -70,12 +62,6 @@ export const authOptions: AuthOptions = {
         // token.name = user.name;
         // token.email = user.email;
         // token.picture = user.image; // if you have an image
-        console.log(
-          "JWT_CALLBACK: Populating token. User:",
-          user,
-          "Resulting token:",
-          token
-        );
       }
       return token;
     },
@@ -87,7 +73,7 @@ export const authOptions: AuthOptions = {
         // session.user.email = token.email as string; // Already on session.user by default
         // session.user.image = token.picture as string; // Already on session.user by default
       }
-      // console.log("SESSION_CALLBACK: Session being returned:", session);
+
       return session;
     },
   },

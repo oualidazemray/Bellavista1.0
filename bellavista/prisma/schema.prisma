@@ -37,6 +37,7 @@ enum NotificationType {
   BOOKING
   MESSAGE
   PROMO
+   ADMIN_MESSAGE
   ALERT
   UPDATE
   GENERAL // Fallback

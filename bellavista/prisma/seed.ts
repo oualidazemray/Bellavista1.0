@@ -2,10 +2,12 @@ import {
   PrismaClient,
   Role,
   RoomType,
+  AlertType,
   RoomView,
   ReservationStatus,
   NotificationType,
 } from "@prisma/client";
+
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -264,6 +266,71 @@ async function main() {
       );
     }
   }
+  // ... (at the end of your main function, before seeding finished log)
+  // --- Seeding Alerts ---
+  console.log("Seeding Alerts for Admin...");
+  // No need to find an admin user for these alerts as they are system-wide for admins via the 'forAdmin' flag.
+  // The 'forAdmin: true' flag is what makes them appear on the admin alerts page.
+
+  const alertsToSeed = [
+    {
+      type: AlertType.PENDING_RESERVATION, // Now AlertType is defined
+      message: "New reservation #RES_SEED_001 requires approval.",
+      forAdmin: true,
+      createdAt: new Date(Date.now() - 1000 * 60 * 5), // 5 mins ago
+    },
+    {
+      type: AlertType.LOW_OCCUPANCY, // Now AlertType is defined
+      message: "Hotel occupancy for next week is low. Consider new promotions.",
+      forAdmin: true,
+      read: true, // Example of a read alert
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
+    },
+    {
+      type: AlertType.HIGH_DEMAND, // Now AlertType is defined
+      message:
+        "High demand detected for the upcoming holiday weekend. Review pricing.",
+      forAdmin: true,
+      createdAt: new Date(Date.now() - 1000 * 60 * 30), // 30 mins ago
+    },
+    {
+      type: AlertType.PENDING_RESERVATION, // Now AlertType is defined
+      message:
+        "Reservation #RES_SEED_002 from Test Client needs immediate attention.",
+      forAdmin: true,
+      createdAt: new Date(Date.now() - 1000 * 60 * 2), // 2 mins ago
+    },
+  ];
+
+  for (const alertData of alertsToSeed) {
+    // Optional: Check if a very similar alert (e.g., same type and first 50 chars of message) already exists to avoid spamming on re-seed
+    const existingAlert = await prisma.alert.findFirst({
+      where: {
+        type: alertData.type,
+        message: { startsWith: alertData.message.substring(0, 50) },
+        forAdmin: true,
+      },
+    });
+
+    if (!existingAlert) {
+      await prisma.alert.create({
+        data: alertData,
+      });
+      console.log(
+        `Created alert: ${alertData.type} - ${alertData.message.substring(
+          0,
+          30
+        )}...`
+      );
+    } else {
+      console.log(
+        `Skipped existing alert: ${
+          alertData.type
+        } - ${alertData.message.substring(0, 30)}...`
+      );
+    }
+  }
+  console.log("Admin alerts seeded or skipped if existing.");
 
   console.log("Seeding finished.");
 }
