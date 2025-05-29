@@ -84,6 +84,7 @@ model User {
   bio               String?   // User's biography
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+   agentCreatedReservations Reservation[] @relation("AgentCreatedReservations")
 
   reservations   Reservation[]
   feedbacks      Feedback[]
@@ -125,6 +126,7 @@ model Admin {
 model Reservation {
   id            String            @id @default(cuid())
   client        User              @relation(fields: [clientId], references: [id])
+  invoices       Invoice[] 
   clientId      String
   rooms         Room[]            @relation("ReservationRooms") // Many-to-many with Room
   checkIn       DateTime
@@ -133,11 +135,13 @@ model Reservation {
   totalPrice    Float
   numAdults     Int
   numChildren   Int?
+   createdByAgentId String?
+  createdByAgent   User?     @relation("AgentCreatedReservations", fields: [createdByAgentId], references: [id])
+
   promoCodeUsed String?
   createdAt     DateTime          @default(now()) // This is effectively the bookingDate
   updatedAt     DateTime          @updatedAt
 
-  invoices      Invoice[]
   sourceLog     ReservationLog?
   consumptions  ServiceConsumption[]
   feedbacks     Feedback[] // A reservation can have multiple feedbacks (e.g., if multiple guests)
@@ -182,6 +186,9 @@ model Invoice {
   exports       InvoiceExport[]
 }
 
+
+
+
 model InvoiceExport {
   id         String       @id @default(cuid())
   invoice    Invoice      @relation(fields: [invoiceId], references: [id])
@@ -191,6 +198,7 @@ model InvoiceExport {
   format     ExportFormat
   createdAt  DateTime     @default(now())
 }
+
 
 model Notification {
   id        String           @id @default(cuid())
