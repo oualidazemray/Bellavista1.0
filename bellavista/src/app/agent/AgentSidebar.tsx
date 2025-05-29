@@ -1,7 +1,7 @@
 // src/components/ui/agent/AgentSidebar.tsx
 "use client";
 
-import React, { useState, useEffect, useRef } from "react"; // Added useRef
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -15,9 +15,9 @@ import {
   Menu,
   X,
   Briefcase,
-  Zap, // Added Zap for hover hint
-  // Bell, // Add if agent has notifications/alerts
+  Zap,
 } from "lucide-react";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 export const AGENT_NAV_ITEMS = [
   {
@@ -66,7 +66,7 @@ interface AgentSidebarNavItemProps {
   label: string;
   path: string;
   isActive: boolean;
-  isEffectivelyCollapsed: boolean; // New prop to reflect actual collapsed state
+  isEffectivelyCollapsed: boolean;
   hasNotification?: boolean;
   onClick: () => void;
 }
@@ -136,7 +136,6 @@ interface AgentSidebarProps {
   onSelectItem: (itemId: AgentNavItemId) => void;
   userName?: string;
   userRole?: string;
-  // No longer need isDesktopCollapsed and onToggleDesktopCollapse from parent if managing hover internally
 }
 
 const AgentSidebar: React.FC<AgentSidebarProps> = ({
@@ -145,22 +144,14 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
   userName = "Hotel Agent",
   userRole = "Reception Staff",
 }) => {
-  const [isManuallyCollapsed, setIsManuallyCollapsed] = useState(false); // For the toggle button state
-  const [isHovered, setIsHovered] = useState(false); // For hover state
+  const [isManuallyCollapsed, setIsManuallyCollapsed] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const sidebarRef = useRef<HTMLElement>(null); // Ref for the aside element
-
-  // This determines if the sidebar should actually appear collapsed
-  // It's collapsed if manually toggled AND not hovered,
-  // OR if not manually toggled but also not hovered (initial state before first manual toggle if starting collapsed).
-  // For simplicity here: expand on hover UNLESS it was manually collapsed.
-  // A more robust logic might be: if manually collapsed, hover doesn't expand. If manually expanded, hover keeps it expanded.
-  // Let's try: hover expands if not manually collapsed. If manually collapsed, it stays collapsed.
-  // If manually expanded (isManuallyCollapsed = false), hover doesn't change it (it's already expanded).
-
-  // Let's simplify: Hover always tries to expand. Manual collapse overrides hover.
   const [sidebarIsEffectivelyCollapsed, setSidebarIsEffectivelyCollapsed] =
-    useState(true); // Start collapsed
+    useState(true);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 1023px)");
+  const sidebarRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -171,19 +162,32 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
   }, []);
 
   const handleMouseEnter = () => {
+    if (isMobile) return;
     setIsHovered(true);
     if (!isManuallyCollapsed) {
-      // Only expand on hover if not manually collapsed
       setSidebarIsEffectivelyCollapsed(false);
     }
   };
 
   const handleMouseLeave = () => {
+    if (isMobile) return;
     setIsHovered(false);
     if (!isManuallyCollapsed) {
-      // Only collapse on leave if not manually collapsed (and thus expanded by hover)
       setSidebarIsEffectivelyCollapsed(true);
     }
+  };
+
+  const toggleSidebar = () => {
+    if (isMobile) {
+      setIsMobileOpen(!isMobileOpen);
+    } else {
+      setIsManuallyCollapsed(!isManuallyCollapsed);
+      setSidebarIsEffectivelyCollapsed(!isManuallyCollapsed);
+    }
+  };
+
+  const closeMobileSidebar = () => {
+    setIsMobileOpen(false);
   };
 
   const mainNavItems = AGENT_NAV_ITEMS.filter((item) => item.id !== "logout");
@@ -192,7 +196,6 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
   return (
     <>
       <style jsx>{`
-        /* ... keyframes ... */
         @keyframes agent-pulse-glow {
           0%,
           100% {
@@ -259,6 +262,26 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
           background-size: 200% 200%;
           animation: gradient-shift 4s ease infinite;
         }
+        .mobile-sidebar {
+          transition: transform 0.3s ease-in-out;
+        }
+        .mobile-sidebar-open {
+          transform: translateX(0);
+        }
+        .mobile-sidebar-closed {
+          transform: translateX(-100%);
+        }
+        .mobile-overlay {
+          transition: opacity 0.3s ease-in-out;
+        }
+        .mobile-overlay-open {
+          opacity: 1;
+          pointer-events: auto;
+        }
+        .mobile-overlay-closed {
+          opacity: 0;
+          pointer-events: none;
+        }
       `}</style>
 
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
@@ -284,10 +307,44 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
         />
       </div>
 
+      {/* Mobile menu button */}
+      <button
+        onClick={toggleSidebar}
+        className={`lg:hidden fixed z-50 top-4 left-4 p-2 rounded-lg bg-slate-800/90 backdrop-blur-md border border-slate-700/50 shadow-lg transition-all hover:bg-slate-700/80 ${
+          isMobileOpen ? "left-64" : "left-4"
+        }`}
+        style={{ transition: "left 0.3s ease-in-out" }}
+      >
+        {isMobileOpen ? (
+          <X className="w-5 h-5 text-white" />
+        ) : (
+          <Menu className="w-5 h-5 text-white" />
+        )}
+      </button>
+
+      {/* Mobile overlay */}
+      <div
+        className={`lg:hidden fixed inset-0 bg-black/50 z-40 mobile-overlay ${
+          isMobileOpen ? "mobile-overlay-open" : "mobile-overlay-closed"
+        }`}
+        onClick={closeMobileSidebar}
+      />
+
+      {/* Desktop and Mobile Sidebar */}
       <aside
         ref={sidebarRef}
-        className={`hidden lg:flex fixed left-0 top-0 h-full z-[51] transition-all duration-300 ease-out 
-                   ${sidebarIsEffectivelyCollapsed ? "w-20" : "w-64"}`}
+        className={`fixed left-0 top-0 h-full z-[51] transition-all duration-300 ease-out 
+                   ${
+                     isMobile
+                       ? `mobile-sidebar ${
+                           isMobileOpen
+                             ? "mobile-sidebar-open w-72"
+                             : "mobile-sidebar-closed w-0"
+                         }`
+                       : sidebarIsEffectivelyCollapsed
+                       ? "w-20"
+                       : "w-64"
+                   }`}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -301,7 +358,7 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
               <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg transform group-hover:scale-105 transition-transform duration-300 cursor-pointer gradient-animated">
                 <Briefcase className="w-5 h-5 text-white" />
               </div>
-              {!sidebarIsEffectivelyCollapsed && (
+              {(!sidebarIsEffectivelyCollapsed || isMobile) && (
                 <div className="overflow-hidden">
                   <h3
                     className="text-white font-semibold text-sm leading-tight truncate"
@@ -329,10 +386,14 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
                     icon={item.icon}
                     label={item.label}
                     path={item.path}
-                    hasNotification={item.hasNotification}
-                    isEffectivelyCollapsed={sidebarIsEffectivelyCollapsed} // Pass the effective state
+                    isEffectivelyCollapsed={
+                      isMobile ? false : sidebarIsEffectivelyCollapsed
+                    }
                     isActive={activeItemId === item.id}
-                    onClick={() => onSelectItem(item.id)}
+                    onClick={() => {
+                      onSelectItem(item.id);
+                      if (isMobile) closeMobileSidebar();
+                    }}
                   />
                 </div>
               ))}
@@ -343,15 +404,20 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
                   icon={logoutItem.icon}
                   label={logoutItem.label}
                   path={logoutItem.path}
-                  isEffectivelyCollapsed={sidebarIsEffectivelyCollapsed} // Pass the effective state
+                  isEffectivelyCollapsed={
+                    isMobile ? false : sidebarIsEffectivelyCollapsed
+                  }
                   isActive={activeItemId === "logout"}
-                  onClick={() => onSelectItem(logoutItem.id)}
+                  onClick={() => {
+                    onSelectItem(logoutItem.id);
+                    if (isMobile) closeMobileSidebar();
+                  }}
                 />
               </div>
             )}
 
-            {/* Hover hint only if sidebar is effectively collapsed AND NOT being hovered (to avoid flicker) */}
-            {sidebarIsEffectivelyCollapsed && !isHovered && (
+            {/* Hover hint */}
+            {sidebarIsEffectivelyCollapsed && !isHovered && !isMobile && (
               <div
                 className="absolute right-2 top-2/3 opacity-50"
                 style={{ animation: "float 2s ease-in-out infinite" }}
@@ -362,7 +428,6 @@ const AgentSidebar: React.FC<AgentSidebarProps> = ({
           </div>
         </div>
       </aside>
-      {/* Mobile navigation is expected to be handled by AgentLayout.tsx */}
     </>
   );
 };

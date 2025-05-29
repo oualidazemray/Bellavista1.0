@@ -1,501 +1,651 @@
-// src/app/api/agent/reservations/[reservationId]/invoice/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getToken } from "next-auth/jwt";
-import { NextRequest } from "next/server";
+import QRCode from "qrcode";
+import puppeteer from "puppeteer";
 import {
   Role,
   ReservationStatus,
-  ExportFormat,
-  NotificationType,
   RoomType as PrismaRoomType,
-  Prisma,
 } from "@prisma/client";
-import fs from "fs"; // Node.js File System module
-import path from "path"; // Node.js Path module
-import PdfPrinter from "pdfmake";
-import QRCode from "qrcode";
-
-// --- PDFMake Font Setup ---
-// 1. Require the vfs_fonts.js. This file contains the font data (like Roboto)
-// and typically assigns it to pdfMake.vfs when it's executed.
-const pdfMakeVfs = require("pdfmake/build/vfs_fonts.js");
-
-// 2. Define the fonts pdfmake should use.
-// These names ('Roboto') must match the font names available in vfs_fonts.js
-const fonts = {
-  Roboto: {
-    normal: "Roboto-Regular.ttf",
-    bold: "Roboto-Medium.ttf",
-    italics: "Roboto-Italic.ttf",
-    bolditalics: "Roboto-MediumItalic.ttf",
-  },
-  // If you had custom fonts, you'd add their .ttf files to a custom vfs
-  // and then define them here. For now, we rely on the default Roboto in vfs_fonts.js.
-};
-
-// 3. Create the PdfPrinter instance.
-// It should automatically pick up the vfs from the globally-like modified pdfMake object
-// if pdfmake/build/vfs_fonts.js correctly populates pdfMake.vfs upon require.
-let printer: PdfPrinter;
-try {
-  // Some versions of pdfmake might expose pdfMake.vfs directly after require
-  // If pdfMake is not globally available or vfs is not set, PdfPrinter might default correctly
-  // This is a common point of failure in bundling if vfs isn't found.
-  if (typeof pdfMake !== "undefined" && pdfMake.vfs) {
-    // Check if global pdfMake was populated
-    // pdfMake.vfs = pdfMakeVfs.pdfMake.vfs; // This line is usually not needed if require worked.
-    // The require itself should execute and set pdfMake.vfs
-    console.log(
-      "API_INVOICE_ROUTE: pdfMake.vfs seems to be set by require('vfs_fonts.js')."
-    );
-  } else if (pdfMakeVfs.pdfMake && pdfMakeVfs.pdfMake.vfs) {
-    // Forcing it if the require result needs explicit assignment
-    // This is less common but a fallback.
-    global.pdfMake = global.pdfMake || {}; // Ensure global.pdfMake exists
-    global.pdfMake.vfs = pdfMakeVfs.pdfMake.vfs;
-    console.log(
-      "API_INVOICE_ROUTE: Manually assigned vfsFonts.pdfMake.vfs to global.pdfMake.vfs."
-    );
-  } else {
-    console.warn(
-      "API_INVOICE_ROUTE: pdfMake.vfs was not found directly after requiring vfs_fonts.js. Relying on PdfPrinter default font loading."
-    );
-  }
-  printer = new PdfPrinter(fonts);
-} catch (fontError) {
-  console.error(
-    "API_INVOICE_ROUTE: Error initializing PdfPrinter with fonts. PDFMake might not find its fonts.",
-    fontError
-  );
-  // Fallback to a printer without custom font definitions if initialization fails
-  // This will likely only support very basic PDF generation without proper font metrics.
-  printer = new PdfPrinter();
-}
-// --- End PDFMake Font Setup ---
 
 interface RouteContext {
-  params: {
-    reservationId: string;
-  };
+  params: { reservationId: string };
 }
 
 interface GenerateInvoiceBody {
   sendEmail?: boolean;
-  clientEmail?: string; // For overriding or confirming email address
+  clientEmail?: string;
+  format?: "png" | "pdf"; // Add format option
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
+  // Extract reservationId from URL to bypass params error
+  const urlPath = request.nextUrl.pathname;
+  const reservationIdMatch = urlPath.match(/\/reservations\/([^/]+)\/invoice$/);
+  const reservationId = reservationIdMatch ? reservationIdMatch[1] : null;
+
+  if (!reservationId) {
+    return new NextResponse(
+      JSON.stringify({ message: "Missing reservationId parameter" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   const token = await getToken({
     req: request,
     secret: process.env.NEXTAUTH_SECRET,
   });
-  const { reservationId } = context.params;
+
+  if (!token) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const body = (await request.json().catch(() => ({}))) as GenerateInvoiceBody;
+  const {
+    sendEmail = false,
+    clientEmail: emailOverride,
+    format = "png",
+  } = body;
+
+  const reservation = await prisma.reservation.findUnique({
+    where: { id: reservationId },
+    include: {
+      client: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          phone: true,
+          profile: { select: { taxId: true } },
+        },
+      },
+      rooms: {
+        select: {
+          name: true,
+          type: true,
+          pricePerNight: true,
+          roomNumber: true,
+        },
+      },
+    },
+  });
+
+  if (!reservation) {
+    return NextResponse.json(
+      { message: "Reservation not found." },
+      { status: 404 }
+    );
+  }
 
   if (
-    !token ||
-    !token.id ||
-    (token.role !== Role.AGENT && token.role !== Role.ADMIN)
+    reservation.status !== ReservationStatus.CHECKED_OUT &&
+    reservation.status !== ReservationStatus.COMPLETED
   ) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      {
+        message:
+          "Invoice can typically be generated for checked-out or completed reservations.",
+      },
+      { status: 400 }
+    );
   }
-  const actionUserId = token.id as string;
-  const actionUserName = token.name || "System"; // Name of the agent/admin generating
 
-  console.log(
-    `API_GENERATE_INVOICE: User ${actionUserId} processing Res ID: ${reservationId}`
+  // Generate QR Code
+  const qrData = `${
+    process.env.NEXTAUTH_URL || "http://localhost:3000"
+  }/client/history?reservationId=${reservationId}`;
+  let qrCodeImage = "";
+  try {
+    qrCodeImage = await QRCode.toDataURL(qrData, {
+      errorCorrectionLevel: "M",
+      width: 200,
+      margin: 1,
+    });
+  } catch (err) {
+    console.error("QR Code generation failed:", err);
+  }
+
+  // Calculate nights
+  const nights = Math.max(
+    1,
+    Math.ceil(
+      (reservation.checkOut.getTime() - reservation.checkIn.getTime()) /
+        (1000 * 3600 * 24)
+    )
   );
 
-  try {
-    const body = (await request
-      .json()
-      .catch(() => ({}))) as GenerateInvoiceBody;
-    const { sendEmail = false, clientEmail: emailOverride } = body;
-
-    const reservation = await prisma.reservation.findUnique({
-      where: { id: reservationId },
-      include: {
-        client: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            phone: true,
-            profile: { select: { taxId: true } },
-          },
-        },
-        rooms: {
-          select: {
-            name: true,
-            type: true,
-            pricePerNight: true,
-            roomNumber: true,
-          },
-        },
-        // Include consumptions if they should be on the invoice
-        // consumptions: { include: { service: { select: { name: true, price: true } } } },
-      },
-    });
-
-    if (!reservation) {
-      return NextResponse.json(
-        { message: "Reservation not found." },
-        { status: 404 }
-      );
-    }
-    // Allow invoice generation for CHECKED_OUT or COMPLETED.
-    // Or even CONFIRMED if you want pro-forma invoices. Adjust as needed.
-    if (
-      reservation.status !== ReservationStatus.CHECKED_OUT &&
-      reservation.status !== ReservationStatus.COMPLETED
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            "Invoice can typically be generated for checked-out or completed reservations.",
-        },
-        { status: 400 }
-      );
-    }
-
-    // --- Generate QR Code ---
-    const qrDataBaseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-    const qrData = `${qrDataBaseUrl}/client/history?reservationId=${reservationId}`; // Example link
-    let qrCodeImage = "";
-    try {
-      qrCodeImage = await QRCode.toDataURL(qrData, {
-        errorCorrectionLevel: "M",
-        width: 70,
-        margin: 1,
-      });
-    } catch (qrErr) {
-      console.error("API_GENERATE_INVOICE: Failed to generate QR Code", qrErr);
-    }
-
-    // --- Define PDF Document ---
-    const nights = Math.max(
-      1,
-      Math.ceil(
-        (reservation.checkOut.getTime() - reservation.checkIn.getTime()) /
-          (1000 * 3600 * 24)
-      )
-    );
-
-    // Detailed room breakdown for table
-    const roomItems = reservation.rooms.map((room) => {
-      const itemSubtotal = room.pricePerNight * nights;
-      return [
-        {
-          text: `${room.name || "N/A"} (${
-            room.roomNumber || PrismaRoomType[room.type]
-          })`,
-          style: "tableCell",
-        },
-        { text: nights.toString(), style: "tableCell", alignment: "center" },
-        {
-          text: room.pricePerNight.toFixed(2),
-          style: "tableCell",
-          alignment: "right",
-        },
-        {
-          text: itemSubtotal.toFixed(2),
-          style: "tableCell",
-          alignment: "right",
-        },
-      ];
-    });
-    const roomSubtotalAmount = roomItems.reduce(
-      (sum, item) => sum + parseFloat(item[3].text),
-      0
-    );
-
-    // TODO: Add service consumptions to the invoice if applicable
-    // const serviceItems = reservation.consumptions.map(con => ...);
-    // const serviceSubtotalAmount = serviceItems.reduce(...);
-    const serviceSubtotalAmount = 0; // Placeholder
-
-    const subtotalBeforeTax = roomSubtotalAmount + serviceSubtotalAmount;
-    const exampleTaxRate = 0.1; // 10%
-    const taxes = subtotalBeforeTax * exampleTaxRate;
-    const grandTotal = reservation.totalPrice; // Use the already calculated and stored totalPrice
-
-    const docDefinition: any = {
-      pageSize: "A4",
-      pageMargins: [40, 60, 40, 60], // [left, top, right, bottom]
-      header: {
-        columns: [
-          {
-            text: "BELLAVISTA HOTEL",
-            style: "pageHeader",
-            alignment: "left",
-            margin: [40, 20, 0, 0],
-          },
-          {
-            text: `Invoice / Guest Folio`,
-            style: "pageSubheader",
-            alignment: "right",
-            margin: [0, 20, 40, 0],
-          },
-        ],
-      },
-      footer: function (currentPage: number, pageCount: number) {
-        return {
-          text: `Page ${currentPage.toString()} of ${pageCount} | Generated: ${new Date().toLocaleString()}`,
-          alignment: "center",
-          style: "pageFooter",
-          margin: [0, 20, 0, 30],
-        };
-      },
-      content: [
-        {
-          text: `Invoice #: INV-${reservationId.substring(0, 8).toUpperCase()}`,
-          style: "invoiceInfo",
-          alignment: "right",
-        },
-        {
-          text: `Reservation ID: ${reservationId}`,
-          style: "invoiceInfo",
-          alignment: "right",
-          margin: [0, 0, 0, 20],
-        },
-        {
-          columns: [
-            {
-              width: "60%",
-              text: [
-                { text: "Billed To:\n", style: "sectionHeaderSmall" },
-                { text: `${reservation.client.name}\n`, bold: true },
-                `${reservation.client.email}\n`,
-                `${reservation.client.phone || ""}\n`,
-                `Tax ID: ${reservation.client.profile?.taxId || "N/A"}`,
-              ],
-            },
-            {
-              width: "40%",
-              alignment: "right",
-              text: [
-                { text: "Hotel Details:\n", style: "sectionHeaderSmall" },
-                "Bellavista Luxury Stay\n",
-                "123 Ocean Drive, Paradise City\n",
-                "Contact: +1234567890\n",
-              ],
-            },
-          ],
-          margin: [0, 0, 0, 20],
-        },
-        {
-          text: "Stay & Service Details",
-          style: "sectionHeader",
-          margin: [0, 0, 0, 5],
-        },
-        {
-          table: {
-            widths: ["*", "auto", "auto", "auto"],
-            body: [
-              [
-                { text: "Description (Room/Service)", style: "tableHeader" },
-                {
-                  text: "Nights/Qty",
-                  style: "tableHeader",
-                  alignment: "center",
-                },
-                {
-                  text: "Unit Price (MAD)",
-                  style: "tableHeader",
-                  alignment: "right",
-                },
-                {
-                  text: "Total (MAD)",
-                  style: "tableHeader",
-                  alignment: "right",
-                },
-              ],
-              ...roomItems,
-              // ...serviceItems, // Add if you have them
-            ],
-          },
-          layout: "lightHorizontalLines",
-          margin: [0, 0, 0, 15],
-        },
-        {
-          columns: [
-            qrCodeImage
-              ? {
-                  image: qrCodeImage,
-                  width: 60,
-                  margin: [0, 10, 20, 0],
-                  alignment: "left",
-                }
-              : { text: "", width: 60 },
-            {
-              width: "*",
-              alignment: "right",
-              stack: [
-                {
-                  text: `Subtotal: ${subtotalBeforeTax.toFixed(2)} MAD`,
-                  margin: [0, 0, 0, 2],
-                },
-                {
-                  text: `Taxes (${(exampleTaxRate * 100).toFixed(
-                    0
-                  )}%): ${taxes.toFixed(2)} MAD`,
-                  margin: [0, 0, 0, 2],
-                },
-                {
-                  canvas: [
-                    {
-                      type: "line",
-                      x1: 0,
-                      y1: 5,
-                      x2: 150,
-                      y2: 5,
-                      lineWidth: 0.5,
-                      lineColor: "#古典BDC3C7",
-                    },
-                  ],
-                  alignment: "right",
-                  width: 150,
-                  margin: [0, 2, 0, 2],
-                }, // Horizontal line
-                {
-                  text: `Grand Total: ${grandTotal.toFixed(2)} MAD`,
-                  style: "grandTotal",
-                  margin: [0, 5, 0, 0],
-                },
-              ],
-            },
-          ],
-          columnGap: 10,
-        },
-        {
-          text: "Payment Status: PAID (Simulated)",
-          style: "paymentStatus",
-          margin: [0, 20, 0, 0],
-        },
-        {
-          text: "Thank you for choosing Bellavista Hotel! We hope to see you again soon.",
-          style: "footerText",
-          alignment: "center",
-          margin: [0, 30, 0, 0],
-        },
-      ],
-      styles: {
-        pageHeader: { fontSize: 10, bold: true, color: "#34495e" },
-        pageSubheader: { fontSize: 10, color: "#7f8c8d" },
-        header: { fontSize: 22, bold: true, color: "#2c3e50" },
-        subheader: { fontSize: 16, bold: true, color: "#34495e" },
-        sectionHeader: {
-          fontSize: 14,
-          bold: true,
-          margin: [0, 15, 0, 5],
-          color: "#2980b9",
-        },
-        sectionHeaderSmall: {
-          fontSize: 10,
-          bold: true,
-          color: "#7f8c8d",
-          margin: [0, 0, 0, 2],
-        },
-        invoiceInfo: { fontSize: 9, color: "#7f8c8d" },
-        tableHeader: { bold: true, fontSize: 9, color: "#34495e" },
-        tableCell: { fontSize: 9, color: "#333" },
-        grandTotal: { fontSize: 14, bold: true, color: "#2c3e50" },
-        paymentStatus: {
-          fontSize: 10,
-          bold: true,
-          color: "green",
-          alignment: "right",
-        },
-        footerText: { fontSize: 9, italics: true, color: "#7f8c8d" },
-        pageFooter: { fontSize: 8, color: "#aaaaaa" },
-      },
-      defaultStyle: { font: "Roboto", fontSize: 10, color: "#444" },
+  // Calculate billing items
+  const roomItems = reservation.rooms.map((room) => {
+    const itemSubtotal = room.pricePerNight * nights;
+    return {
+      description: `${room.name || "N/A"} (${
+        room.roomNumber || PrismaRoomType[room.type]
+      })`,
+      nights,
+      unitPrice: room.pricePerNight.toFixed(2),
+      total: itemSubtotal.toFixed(2),
     };
+  });
 
-    // --- Generate PDF Buffer ---
-    const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
-      const pdfDoc = printer.createPdfKitDocument(docDefinition);
-      const chunks: Uint8Array[] = [];
-      pdfDoc.on("data", (chunk) => chunks.push(chunk));
-      pdfDoc.on("end", () => resolve(Buffer.concat(chunks)));
-      pdfDoc.on("error", (err) => reject(err));
-      pdfDoc.end();
+  const roomSubtotalAmount = roomItems.reduce(
+    (sum, item) => sum + parseFloat(item.total),
+    0
+  );
+  const serviceSubtotalAmount = 0;
+  const subtotalBeforeTax = roomSubtotalAmount + serviceSubtotalAmount;
+  const exampleTaxRate = 0.1;
+  const taxes = subtotalBeforeTax * exampleTaxRate;
+  const grandTotal = reservation.totalPrice;
+
+  // Generate HTML template optimized for PNG
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Invoice</title>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+            
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            
+            body {
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                line-height: 1.4;
+                color: #1a202c;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 30px;
+                min-height: 100vh;
+            }
+            
+            .invoice-container {
+                max-width: 800px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 16px;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                overflow: hidden;
+            }
+            
+            .invoice-header {
+                background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 100%);
+                color: white;
+                padding: 40px;
+                position: relative;
+                overflow: hidden;
+            }
+            
+            .invoice-header::before {
+                content: '';
+                position: absolute;
+                top: -50%;
+                right: -50%;
+                width: 200%;
+                height: 200%;
+                background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="50" cy="10" r="0.5" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+                opacity: 0.3;
+                z-index: 1;
+            }
+            
+            .header-content {
+                position: relative;
+                z-index: 2;
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+            }
+            
+            .hotel-info h1 {
+                font-size: 32px;
+                font-weight: 700;
+                margin-bottom: 8px;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            
+            .hotel-info p {
+                font-size: 16px;
+                opacity: 0.9;
+                font-weight: 300;
+            }
+            
+            .invoice-details {
+                text-align: right;
+            }
+            
+            .invoice-details h2 {
+                font-size: 28px;
+                font-weight: 600;
+                margin-bottom: 12px;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            
+            .invoice-details p {
+                font-size: 14px;
+                opacity: 0.9;
+                margin-bottom: 6px;
+            }
+            
+            .invoice-body {
+                padding: 40px;
+            }
+            
+            .billing-section {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 40px;
+                margin-bottom: 40px;
+                padding: 30px;
+                background: #f8fafc;
+                border-radius: 12px;
+                border: 1px solid #e2e8f0;
+            }
+            
+            .billing-info h3 {
+                font-size: 18px;
+                font-weight: 600;
+                color: #2d3748;
+                margin-bottom: 16px;
+                padding-bottom: 8px;
+                border-bottom: 2px solid #4299e1;
+            }
+            
+            .billing-info p {
+                color: #4a5568;
+                font-size: 14px;
+                margin-bottom: 8px;
+                line-height: 1.5;
+            }
+            
+            .services-section h3 {
+                font-size: 22px;
+                font-weight: 600;
+                color: #2b6cb0;
+                margin-bottom: 24px;
+                padding-bottom: 12px;
+                border-bottom: 3px solid #4299e1;
+                display: flex;
+                align-items: center;
+            }
+            
+            .services-section h3::before {
+                content: '🏨';
+                margin-right: 10px;
+                font-size: 20px;
+            }
+            
+            .services-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 30px;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }
+            
+            .services-table th {
+                background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+                color: white;
+                padding: 18px 15px;
+                text-align: left;
+                font-weight: 600;
+                font-size: 14px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            
+            .services-table td {
+                padding: 18px 15px;
+                border-bottom: 1px solid #e2e8f0;
+                font-size: 14px;
+                color: #4a5568;
+                background: white;
+            }
+            
+            .services-table tbody tr:hover {
+                background: #f7fafc;
+            }
+            
+            .services-table th:last-child,
+            .services-table td:last-child {
+                text-align: right;
+                font-weight: 600;
+            }
+            
+            .totals-section {
+                margin-left: auto;
+                width: 350px;
+                padding: 25px;
+                background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+                border-radius: 12px;
+                margin-bottom: 30px;
+                border: 1px solid #e2e8f0;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }
+            
+            .total-row {
+                display: flex;
+                justify-content: space-between;
+                padding: 10px 0;
+                font-size: 15px;
+                color: #4a5568;
+            }
+            
+            .total-row.grand-total {
+                border-top: 3px solid #2b6cb0;
+                padding-top: 18px;
+                margin-top: 15px;
+                font-size: 20px;
+                font-weight: 700;
+                color: #1a365d;
+                background: white;
+                margin: 15px -25px -25px -25px;
+                padding: 20px 25px;
+                border-radius: 0 0 12px 12px;
+            }
+            
+            .footer-section {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-top: 40px;
+                padding: 30px;
+                background: #f8fafc;
+                border-radius: 12px;
+                border: 1px solid #e2e8f0;
+            }
+            
+            .qr-section {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .qr-code img {
+                width: 100px;
+                height: 100px;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }
+            
+            .qr-label {
+                margin-top: 8px;
+                font-size: 12px;
+                color: #718096;
+                text-align: center;
+            }
+            
+            .payment-status {
+                text-align: right;
+            }
+            
+            .payment-status p {
+                color: #38a169;
+                font-weight: 600;
+                font-size: 18px;
+                margin-bottom: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+            }
+            
+            .payment-status p::before {
+                content: '✓';
+                background: #38a169;
+                color: white;
+                border-radius: 50%;
+                width: 24px;
+                height: 24px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-right: 8px;
+                font-size: 14px;
+            }
+            
+            .stay-dates {
+                color: #718096;
+                font-size: 14px;
+                line-height: 1.5;
+            }
+            
+            .thank-you {
+                text-align: center;
+                margin-top: 30px;
+                padding: 25px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border-radius: 12px;
+                position: relative;
+                overflow: hidden;
+            }
+            
+            .thank-you::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="stars" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23stars)"/></svg>');
+                opacity: 0.3;
+            }
+            
+            .thank-you-content {
+                position: relative;
+                z-index: 2;
+            }
+            
+            .thank-you h4 {
+                font-size: 20px;
+                font-weight: 600;
+                margin-bottom: 12px;
+            }
+            
+            .thank-you p {
+                font-size: 16px;
+                opacity: 0.9;
+            }
+            
+            .generation-info {
+                text-align: center;
+                margin-top: 25px;
+                color: #a0aec0;
+                font-size: 12px;
+                padding: 15px;
+                background: #f7fafc;
+                border-radius: 8px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="invoice-container">
+            <div class="invoice-header">
+                <div class="header-content">
+                    <div class="hotel-info">
+                        <h1>BELLAVISTA HOTEL</h1>
+                        <p>Luxury Hospitality Excellence</p>
+                    </div>
+                    <div class="invoice-details">
+                        <h2>INVOICE</h2>
+                        <p><strong>Invoice #:</strong> INV-${reservationId
+                          .substring(0, 8)
+                          .toUpperCase()}</p>
+                        <p><strong>Reservation ID:</strong> ${reservationId}</p>
+                        <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="invoice-body">
+                <div class="billing-section">
+                    <div class="billing-info">
+                        <h3>Billed To:</h3>
+                        <p><strong>${reservation.client.name}</strong></p>
+                        <p>${reservation.client.email}</p>
+                        ${
+                          reservation.client.phone
+                            ? `<p>${reservation.client.phone}</p>`
+                            : ""
+                        }
+                        <p>Tax ID: ${
+                          reservation.client.profile?.taxId || "N/A"
+                        }</p>
+                    </div>
+                    
+                    <div class="billing-info">
+                        <h3>Hotel Details:</h3>
+                        <p><strong>Bellavista Luxury Stay</strong></p>
+                        <p>123 Ocean Drive, Paradise City</p>
+                        <p>Contact: +1234567890</p>
+                        <p>Email: info@bellavista.com</p>
+                    </div>
+                </div>
+                
+                <div class="services-section">
+                    <h3>Stay & Service Details</h3>
+                    <table class="services-table">
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th style="text-align: center;">Nights/Qty</th>
+                                <th style="text-align: right;">Unit Price (MAD)</th>
+                                <th style="text-align: right;">Total (MAD)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${roomItems
+                              .map(
+                                (item) => `
+                                <tr>
+                                    <td>${item.description}</td>
+                                    <td style="text-align: center;">${item.nights}</td>
+                                    <td style="text-align: right;">${item.unitPrice}</td>
+                                    <td style="text-align: right;">${item.total}</td>
+                                </tr>
+                            `
+                              )
+                              .join("")}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="totals-section">
+                    <div class="total-row">
+                        <span>Subtotal:</span>
+                        <span>${subtotalBeforeTax.toFixed(2)} MAD</span>
+                    </div>
+                    <div class="total-row">
+                        <span>Taxes (10%):</span>
+                        <span>${taxes.toFixed(2)} MAD</span>
+                    </div>
+                    <div class="total-row grand-total">
+                        <span>Grand Total:</span>
+                        <span>${grandTotal.toFixed(2)} MAD</span>
+                    </div>
+                </div>
+                
+                <div class="footer-section">
+                    ${
+                      qrCodeImage
+                        ? `
+                        <div class="qr-section">
+                            <div class="qr-code">
+                                <img src="${qrCodeImage}" alt="QR Code" />
+                            </div>
+                            <div class="qr-label">Scan for reservation details</div>
+                        </div>
+                    `
+                        : "<div></div>"
+                    }
+                    
+                    <div class="payment-status">
+                        <p>Payment Status: PAID</p>
+                        <div class="stay-dates">
+                            <strong>Check-in:</strong> ${reservation.checkIn.toLocaleDateString()}<br>
+                            <strong>Check-out:</strong> ${reservation.checkOut.toLocaleDateString()}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="thank-you">
+                    <div class="thank-you-content">
+                        <h4>Thank you for choosing Bellavista Hotel!</h4>
+                        <p>We hope to see you again soon for another exceptional stay.</p>
+                    </div>
+                </div>
+                
+                <div class="generation-info">
+                    <p>Generated: ${new Date().toLocaleString()} | Format: PNG Invoice</p>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+  `;
+
+  // Generate PNG with Puppeteer
+  let imageBuffer;
+  try {
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+      ],
     });
 
-    // --- Save PDF to File System ---
-    const invoiceDirectory = path.join(process.cwd(), "public", "invoices");
-    if (!fs.existsSync(invoiceDirectory)) {
-      fs.mkdirSync(invoiceDirectory, { recursive: true });
-    }
-    const fileName = `Bellavista-Invoice-${reservationId.substring(0, 8)}.pdf`;
-    const filePath = path.join(invoiceDirectory, fileName);
-    const relativeFilePath = `/invoices/${fileName}`;
+    const page = await browser.newPage();
 
-    fs.writeFileSync(filePath, pdfBuffer);
-    console.log(`API_GENERATE_INVOICE: PDF Invoice saved to: ${filePath}`);
-
-    // --- Update or Create Invoice Record in DB ---
-    let invoice = await prisma.invoice.findUnique({
-      where: { reservationId: reservationId },
-    });
-    if (invoice) {
-      invoice = await prisma.invoice.update({
-        where: { reservationId: reservationId },
-        data: {
-          fileUrl: relativeFilePath,
-          sentByEmail: sendEmail ? true : invoice.sentByEmail,
-          updatedAt: new Date(),
-        },
-      });
-    } else {
-      invoice = await prisma.invoice.create({
-        data: {
-          reservationId: reservationId,
-          fileUrl: relativeFilePath,
-          sentByEmail: sendEmail,
-        },
-      });
-    }
-    console.log(
-      `API_GENERATE_INVOICE: Invoice DB record ${invoice.id} ${
-        invoice ? "updated" : "created"
-      }.`
-    );
-
-    await prisma.invoiceExport.create({
-      data: {
-        invoiceId: invoice.id,
-        userId: actionUserId,
-        format: ExportFormat.PDF,
-      },
+    // Set viewport for consistent rendering
+    await page.setViewport({
+      width: 900,
+      height: 1200,
+      deviceScaleFactor: 2, // For high-DPI rendering
     });
 
-    // --- Simulate Sending Email (if requested) ---
-    let emailSentMessage = "";
-    if (sendEmail) {
-      const emailToSendTo = emailOverride || reservation.client.email;
-      console.log(
-        `API_GENERATE_INVOICE: Simulating sending invoice PDF (${relativeFilePath}) to ${emailToSendTo}`
-      );
-      // TODO: Implement actual email sending logic (e.g., Nodemailer, Resend, SendGrid)
-      // For now, we've already updated sentByEmail status.
-      emailSentMessage = ` Email "sent" to ${emailToSendTo}.`;
-    }
-
-    return NextResponse.json({
-      message: `Invoice generated successfully.${emailSentMessage}`,
-      invoiceId: invoice.id,
-      fileUrl: relativeFilePath,
-      sentByEmail: invoice.sentByEmail,
+    await page.setContent(htmlContent, {
+      waitUntil: "networkidle0",
     });
-  } catch (error: any) {
-    console.error(
-      `API_GENERATE_INVOICE_ERROR (Res ID: ${reservationId}):`,
-      error
-    );
+
+    // Take screenshot
+    imageBuffer = await page.screenshot({
+      type: "png",
+      fullPage: true,
+    });
+
+    await browser.close();
+  } catch (error) {
+    console.error("PNG generation failed:", error);
     return NextResponse.json(
-      { message: "Error processing invoice", detail: error.message },
+      { message: "Failed to generate PNG. Please try again later." },
       { status: 500 }
     );
   }
+
+  // Check if client expects JSON and provide a fallback
+  const acceptHeader = request.headers.get("accept");
+  if (acceptHeader && acceptHeader.includes("application/json")) {
+    return NextResponse.json(
+      {
+        message: "PNG generated",
+        downloadUrl: `/api/agent/reservations/${reservationId}/invoice/download?format=png`,
+      },
+      { status: 200 }
+    );
+  }
+
+  return new NextResponse(imageBuffer, {
+    status: 200,
+    headers: {
+      "Content-Type": "image/png",
+      "Content-Disposition": `attachment; filename=invoice-${reservationId}.png`,
+    },
+  });
 }
